@@ -36,9 +36,9 @@ func main() {
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
 
-	labels := sync.NewMap[string, struct{}]()
-	profileTypes := sync.NewMap[string, struct{}]()
-	series := sync.NewMap[string, []*queryv1alpha1.MetricsSample]()
+	labels := sync.NewExpireMap[string, struct{}](time.Minute)
+	profileTypes := sync.NewExpireMap[string, struct{}](time.Minute)
+	series := sync.NewExpireMap[string, []*queryv1alpha1.MetricsSample](30 * time.Second)
 
 	go func() {
 		s := make(chan os.Signal)
@@ -57,10 +57,15 @@ func main() {
 	<-ctx.Done()
 }
 
+type LabelStore interface {
+	Store(string, struct{})
+	Range(func(string, struct{}) bool)
+}
+
 func queryLabels(
 	ctx context.Context,
 	client queryv1alpha1connect.QueryServiceClient,
-	labelsStore *sync.Map[string, struct{}],
+	labelsStore LabelStore,
 ) {
 	ticker := time.NewTicker(5 * time.Second)
 	for {
@@ -69,13 +74,13 @@ func queryLabels(
 			return
 		case <-ticker.C:
 			//log.Println("querying labels...")
-			start := time.Now()
+			//start := time.Now()
 			resp, err := client.Labels(ctx, connect.NewRequest(&queryv1alpha1.LabelsRequest{}))
 			if err != nil {
 				log.Println("failed to make labels request", err)
 				continue
 			}
-			log.Printf("querying labels took %v and got %d labels\n", time.Since(start), len(resp.Msg.LabelNames))
+			//log.Printf("querying labels took %v and got %d labels\n", time.Since(start), len(resp.Msg.LabelNames))
 
 			for _, label := range resp.Msg.LabelNames {
 				labelsStore.Store(label, struct{}{})
@@ -87,7 +92,7 @@ func queryLabels(
 func queryValues(
 	ctx context.Context,
 	client queryv1alpha1connect.QueryServiceClient,
-	labelsStore *sync.Map[string, struct{}],
+	labelsStore LabelStore,
 ) {
 	ticker := time.NewTicker(5 * time.Second)
 
@@ -107,8 +112,8 @@ func queryValues(
 				continue
 			}
 
-			start := time.Now()
-			resp, err := client.Values(ctx, connect.NewRequest[queryv1alpha1.ValuesRequest](&queryv1alpha1.ValuesRequest{
+			//start := time.Now()
+			_, err := client.Values(ctx, connect.NewRequest[queryv1alpha1.ValuesRequest](&queryv1alpha1.ValuesRequest{
 				LabelName: labelName,
 				Match:     nil,
 				Start:     timestamppb.New(time.Now().Add(-1 * time.Hour)),
@@ -118,16 +123,20 @@ func queryValues(
 				log.Println("failed to make values request", err)
 				continue
 			}
-			log.Printf("querying values took %v for %s and got %d values\n", time.Since(start), labelName, len(resp.Msg.LabelValues))
+			//log.Printf("querying values took %v for %s and got %d values\n", time.Since(start), labelName, len(resp.Msg.LabelValues))
 		}
 	}
+}
 
+type ProfileTypeStore interface {
+	Store(string, struct{})
+	Range(func(string, struct{}) bool)
 }
 
 func queryProfileTypes(
 	ctx context.Context,
 	client queryv1alpha1connect.QueryServiceClient,
-	profileTypes *sync.Map[string, struct{}],
+	profileTypes ProfileTypeStore,
 ) {
 	ticker := time.NewTicker(10 * time.Second)
 	for {
@@ -136,13 +145,13 @@ func queryProfileTypes(
 			return
 		case <-ticker.C:
 			//log.Println("querying profile types...")
-			start := time.Now()
+			//start := time.Now()
 			resp, err := client.ProfileTypes(ctx, connect.NewRequest[queryv1alpha1.ProfileTypesRequest](nil))
 			if err != nil {
 				log.Println("failed to make profiles types request", err)
 				continue
 			}
-			log.Printf("querying profile types took %v and got %d types\n", time.Since(start), len(resp.Msg.Types))
+			//log.Printf("querying profile types took %v and got %d types\n", time.Since(start), len(resp.Msg.Types))
 
 			types := resp.Msg.GetTypes()
 			if len(types) == 0 {
@@ -159,11 +168,16 @@ func queryProfileTypes(
 	}
 }
 
+type SeriesStore interface {
+	Store(string, []*queryv1alpha1.MetricsSample)
+	Range(func(string, []*queryv1alpha1.MetricsSample) bool)
+}
+
 func queryQueryRange(
 	ctx context.Context,
 	client queryv1alpha1connect.QueryServiceClient,
-	profileTypesStore *sync.Map[string, struct{}],
-	seriesStore *sync.Map[string, []*queryv1alpha1.MetricsSample],
+	profileTypesStore ProfileTypeStore,
+	seriesStore SeriesStore,
 ) {
 	ticker := time.NewTicker(15 * time.Second)
 
@@ -183,7 +197,7 @@ func queryQueryRange(
 			}
 
 			//log.Println("querying query range...", pt)
-			start := time.Now()
+			//start := time.Now()
 			resp, err := client.QueryRange(ctx, connect.NewRequest[queryv1alpha1.QueryRangeRequest](&queryv1alpha1.QueryRangeRequest{
 				Query: pt,
 				Start: timestamppb.New(time.Now().Add(-1 * time.Hour)),
@@ -193,7 +207,7 @@ func queryQueryRange(
 				log.Println(err)
 				continue
 			}
-			log.Printf("querying range took %v for %s and got %d series\n", time.Since(start), pt, len(resp.Msg.Series))
+			//log.Printf("querying range took %v for %s and got %d series\n", time.Since(start), pt, len(resp.Msg.Series))
 
 			for _, series := range resp.Msg.Series {
 				lset := labels.Labels{}
@@ -211,7 +225,7 @@ func queryQueryRange(
 func queryQuerySingle(
 	ctx context.Context,
 	client queryv1alpha1connect.QueryServiceClient,
-	seriesStore *sync.Map[string, []*queryv1alpha1.MetricsSample],
+	seriesStore SeriesStore,
 ) {
 	ticker := time.NewTicker(10 * time.Second)
 
@@ -239,7 +253,7 @@ func queryQuerySingle(
 
 			//log.Println("querying single...", series, reportType.String(), sample.Timestamp.Seconds)
 
-			start := time.Now()
+			//start := time.Now()
 			_, err := client.Query(ctx, connect.NewRequest[queryv1alpha1.QueryRequest](&queryv1alpha1.QueryRequest{
 				Mode: queryv1alpha1.QueryRequest_MODE_SINGLE_UNSPECIFIED,
 				Options: &queryv1alpha1.QueryRequest_Single{
@@ -255,7 +269,7 @@ func queryQuerySingle(
 				continue
 			}
 
-			log.Printf("querying %s took %v for %s\n", reportType.String(), time.Since(start), series)
+			//log.Printf("querying %s took %v for %s\n", reportType.String(), time.Since(start), series)
 		}
 	}
 }

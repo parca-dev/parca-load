@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/bufbuild/connect-go v0.1.1
+	github.com/matryer/is v1.4.0
 	github.com/prometheus/prometheus v0.36.2
 	go.buf.build/bufbuild/connect-go/parca-dev/parca v1.3.21
 	google.golang.org/protobuf v1.28.0
