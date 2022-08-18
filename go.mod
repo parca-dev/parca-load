@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/bufbuild/connect-go v0.1.1
+	github.com/oklog/run v1.1.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/matryer/is v1.4.0
 	github.com/prometheus/prometheus v0.36.2
