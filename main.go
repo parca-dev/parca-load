@@ -25,7 +25,7 @@ import (
 	"github.com/parca-dev/parca-load/sync"
 )
 
-const grpcCodeOK = "OK"
+const grpcCodeOK = "ok"
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -64,6 +64,7 @@ func main() {
 	go queryProfileTypes(ctx, client, reg, profileTypes)
 	go queryQueryRange(ctx, client, reg, profileTypes, series)
 	go queryQuerySingle(ctx, client, reg, series)
+	go queryQueryMerge(ctx, client, reg, series)
 
 	go internalServer(ctx, reg, *addr)
 
@@ -291,7 +292,7 @@ func queryQuerySingle(
 		Help:        "The seconds it takes to make Query requests against a Parca",
 		ConstLabels: map[string]string{"mode": "single"},
 		Buckets:     []float64{0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5},
-	}, []string{"grpc_code"})
+	}, []string{"grpc_code", "report_type", "range"})
 
 	ticker := time.NewTicker(10 * time.Second)
 
@@ -331,13 +332,101 @@ func queryQuerySingle(
 				ReportType: reportType,
 			}))
 			if err != nil {
-				histogram.WithLabelValues(connect.CodeOf(err).String()).Observe(time.Since(start).Seconds())
+				histogram.WithLabelValues(connect.CodeOf(err).String(), reportType.String(), "").Observe(time.Since(start).Seconds())
 				log.Println(err)
 				continue
 			}
 
-			histogram.WithLabelValues(grpcCodeOK).Observe(time.Since(start).Seconds())
+			histogram.WithLabelValues(grpcCodeOK, reportType.String(), "").Observe(time.Since(start).Seconds())
 			log.Printf("querying %s took %v for %s\n", reportType.String(), time.Since(start), series)
+		}
+	}
+}
+
+func queryQueryMerge(
+	ctx context.Context,
+	client queryv1alpha1connect.QueryServiceClient,
+	reg *prometheus.Registry,
+	seriesStore *sync.Map[string, []*queryv1alpha1.MetricsSample],
+) {
+	histogram := promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
+		Name:        "parca_client_query_seconds",
+		Help:        "The seconds it takes to make Query requests against a Parca",
+		ConstLabels: map[string]string{"mode": "merge"},
+		Buckets:     []float64{0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5},
+	}, []string{"grpc_code", "report_type", "range"})
+
+	ticker := time.NewTicker(15 * time.Second)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			var (
+				series  string
+				samples []*queryv1alpha1.MetricsSample
+			)
+			seriesStore.Range(func(k string, v []*queryv1alpha1.MetricsSample) bool {
+				series = k
+				samples = v
+				return false
+			})
+
+			if series == "" || len(samples) == 0 {
+				continue
+			}
+
+			first := samples[0]
+			last := samples[len(samples)-1]
+			timerange := last.Timestamp.AsTime().Sub(first.Timestamp.AsTime())
+
+			start := first.Timestamp.AsTime()
+			end := last.Timestamp.AsTime()
+
+			if timerange > 15*time.Minute {
+				start = end.Add(-15 * time.Minute)
+			} else if timerange > 5*time.Minute {
+				start = end.Add(-5 * time.Minute)
+			} else if timerange > time.Minute {
+				start = end.Add(-1 * time.Minute)
+			} else {
+				// Too little data we'll ignore it and not make a merge request this time.
+				continue
+			}
+
+			reportType := queryv1alpha1.QueryRequest_ReportType(rand.Intn(2))
+
+			reqStart := time.Now()
+			_, err := client.Query(ctx, connect.NewRequest[queryv1alpha1.QueryRequest](&queryv1alpha1.QueryRequest{
+				Mode: queryv1alpha1.QueryRequest_MODE_MERGE,
+				Options: &queryv1alpha1.QueryRequest_Merge{
+					Merge: &queryv1alpha1.MergeProfile{
+						Query: series,
+						Start: timestamppb.New(start),
+						End:   timestamppb.New(end),
+					},
+				},
+				ReportType: reportType,
+			}))
+			if err != nil {
+				histogram.WithLabelValues(
+					connect.CodeOf(err).String(),
+					reportType.String(),
+					end.Sub(start).String(),
+				).Observe(time.Since(reqStart).Seconds())
+
+				log.Println(err)
+				continue
+			}
+
+			histogram.WithLabelValues(
+				grpcCodeOK,
+				reportType.String(),
+				end.Sub(start).String(),
+			).Observe(time.Since(reqStart).Seconds())
+
+			log.Printf("querying %s took %v for %s\n", reportType.String(), time.Since(reqStart), series)
 		}
 	}
 }
