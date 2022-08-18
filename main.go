@@ -32,12 +32,20 @@ func main() {
 
 	url := flag.String("url", "http://localhost:7070", "The URL for the Parca instance to query")
 	addr := flag.String("addr", "127.0.0.1:7171", "The address the HTTP server binds to")
+	token := flag.String("token", "", "A bearer token that can be send along each request")
 	flag.Parse()
+
+	clientOptions := []connect.ClientOption{
+		connect.WithGRPCWeb(),
+	}
+	if *token != "" {
+		clientOptions = append(clientOptions, connect.WithInterceptors(&bearerTokenInterceptor{token: *token}))
+	}
 
 	client := queryv1alpha1connect.NewQueryServiceClient(
 		&http.Client{Timeout: 10 * time.Second},
 		*url,
-		connect.WithGRPCWeb(),
+		clientOptions...,
 	)
 
 	ctx, stop := context.WithCancel(context.Background())
@@ -488,4 +496,23 @@ func queryQueryMerge(
 	}
 
 	return execute, interrupt
+}
+
+type bearerTokenInterceptor struct {
+	token string
+}
+
+func (i *bearerTokenInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		req.Header().Set("authorization", "Bearer "+i.token)
+		return next(ctx, req)
+	}
+}
+
+func (i *bearerTokenInterceptor) WrapStreamContext(ctx context.Context) context.Context { return ctx }
+func (i *bearerTokenInterceptor) WrapStreamSender(ctx context.Context, sender connect.Sender) connect.Sender {
+	return sender
+}
+func (i *bearerTokenInterceptor) WrapStreamReceiver(ctx context.Context, receiver connect.Receiver) connect.Receiver {
+	return receiver
 }
