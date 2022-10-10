@@ -300,7 +300,7 @@ func queryQueryRange(
 				start := time.Now()
 				resp, err := client.QueryRange(ctx, connect.NewRequest[queryv1alpha1.QueryRangeRequest](&queryv1alpha1.QueryRangeRequest{
 					Query: pt,
-					Start: timestamppb.New(time.Now().Add(-1 * time.Hour)),
+					Start: timestamppb.New(time.Now().Add(-15 * time.Minute)),
 					End:   timestamppb.New(time.Now()),
 				}))
 				if err != nil {
