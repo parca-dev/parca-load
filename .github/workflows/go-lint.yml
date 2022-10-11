@@ -1,0 +1,79 @@
+name: golangci-lint
+on:
+  push:
+    tags:
+      - v*
+    branches:
+    - main
+    - release-*
+  pull_request:
+    branches:
+    - main
+    - release-*
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=go depName=github.com/golangci/golangci-lint
+  GOLANGCI_LINT_VERSION: v1.50.0
+
+jobs:
+  skip-check:
+    name: Skip check
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      should_skip: ${{ steps.skip-check.outputs.should_skip }}
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - id: skip-check
+        uses: fkirc/skip-duplicate-actions@f11521568414503656a5af807dc3018c012552c4 # tag=v5.2.0
+        with:
+          do_not_skip: '["push", "schedule", "workflow_dispatch"]'
+          paths: |-
+            [
+              "**.go",
+              ".github/workflows/go-lint.yml",
+              ".go-version",
+              ".golangci.yml",
+              ".node-version"
+            ]
+          skip_after_successful_duplicate: false
+
+  lint:
+    name: Go Lint
+    needs: skip-check
+    if: ${{ needs.skip-check.outputs.should_skip != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3.1.0
+
+      - name: Set up Go
+        uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f # tag=v3.3.0
+        with:
+          go-version-file: .go-version
+          check-latest: true
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@969bd2663942d722d85b6a8626225850c2f7be4b # tag=v3.5.0
+        with:
+          node-version-file: .node-version
+          cache: 'yarn'
+
+      - name: Build
+        run: go build -v
+
+      - name: Format
+        run: make go/fmt && git diff --exit-code
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@537aa1903e5d359d0b27dbc19ddd22c5087f3fbc # tag=v3.2.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
