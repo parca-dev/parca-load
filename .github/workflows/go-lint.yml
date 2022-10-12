@@ -61,18 +61,6 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@969bd2663942d722d85b6a8626225850c2f7be4b # tag=v3.5.0
-        with:
-          node-version-file: .node-version
-          cache: 'yarn'
-
-      - name: Build
-        run: go build -v
-
-      - name: Format
-        run: make go/fmt && git diff --exit-code
-
       - name: golangci-lint
         uses: golangci/golangci-lint-action@537aa1903e5d359d0b27dbc19ddd22c5087f3fbc # tag=v3.2.0
         with:
