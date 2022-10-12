@@ -22,8 +22,7 @@ RUN chmod +x parca-load
 
 # https://github.com/hadolint/hadolint/issues/861
 # hadolint ignore=DL3029
-# TODO: Add the TARGETPLATFORM back in, but this failed in CI
-FROM docker.io/alpine:3.16.2@sha256:bc41182d7ef5ffc53a40b044e725193bc10142a1243f395ee852a8d9730fc2ad AS runner
+FROM --platform="${TARGETPLATFORM:-linux/amd64}"  docker.io/alpine:3.16.2@sha256:bc41182d7ef5ffc53a40b044e725193bc10142a1243f395ee852a8d9730fc2ad AS runner
 
 USER 65533
 

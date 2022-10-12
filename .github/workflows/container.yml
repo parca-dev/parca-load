@@ -136,7 +136,7 @@ jobs:
         run: echo "GITHUB_COMMIT=$(git describe --no-match --dirty --always --abbrev=8)" >> $GITHUB_ENV
 
       - name: Build container
-        run: podman build --timestamp 0 --manifest "ghcr.io/parca-dev/parca-load:{{ .env.GITHUB_BRANCH_NAME }}-{{ .env.GITHUB_COMMIT }}" .
+        run: podman build --platform linux/amd64,linux/arm64 --timestamp 0 --manifest "ghcr.io/parca-dev/parca-load:{{ .env.GITHUB_BRANCH_NAME }}-{{ .env.GITHUB_COMMIT }}" .
 
       - name: Check images created
         run: podman images | grep 'ghcr.io/parca-dev/parca-load'
