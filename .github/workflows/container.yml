@@ -63,7 +63,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f # tag=v3.3.0
         with:
-          go-version-file: .go-version
+          go-version-file: 'go.mod'
           check-latest: true
           cache: true
 
@@ -119,7 +119,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f # tag=v3.3.0
         with:
-          go-version-file: .go-version
+          go-version-file: 'go.mod'
           check-latest: true
 
       - uses: actions/download-artifact@fb598a63ae348fa914e94cd0ff38f362e927b741 # tag=v3.0.0
