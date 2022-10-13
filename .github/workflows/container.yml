@@ -38,14 +38,10 @@ jobs:
           paths: |-
             [
               "**.go",
-              ".dockerignore",
               ".github/workflows/container.yml",
-              ".go-version",
-              ".node-version",
-              "Dockerfile*",
+              "Dockerfile",
               "go.mod",
-              "go.sum",
-              "ui/**"
+              "go.sum"
             ]
           skip_after_successful_duplicate: false
 
