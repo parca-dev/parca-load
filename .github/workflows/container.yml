@@ -136,7 +136,7 @@ jobs:
         run: echo "GITHUB_COMMIT=${GITHUB_SHA:0:8}" >> $GITHUB_ENV
 
       - name: Build container
-        run: podman build --platform linux/amd64,linux/arm64 --timestamp 0 --manifest "ghcr.io/parca-dev/parca-load:{{ env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }}" .
+        run: podman build --platform linux/amd64,linux/arm64 --timestamp 0 --manifest "ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}" .
 
       - name: Check images created
         run: podman images | grep 'ghcr.io/parca-dev/parca-load'
@@ -160,6 +160,6 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: true
         run: |
-          podman manifest push --all ghcr.io/parca-dev/parca-load:{{ env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }} docker://ghcr.io/parca-dev/parca-load:{{ env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }}
-          crane digest ghcr.io/parca-dev/parca-load:{{ .env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }}
-          cosign sign --force -a GIT_HASH=$(COMMIT) -a GIT_VERSION={{ env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }} ghcr.io/parca-dev/parca-load@$(shell crane digest ghcr.io/parca-dev/parca-load:{{ env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }})
+          podman manifest push --all "ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}" "docker://ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}"
+          crane digest "ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}"
+          cosign sign --force -a "GIT_HASH=${GITHUB_COMMIT}" -a "GIT_VERSION=${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}" ghcr.io/parca-dev/parca-load@$(shell crane digest "ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}")
