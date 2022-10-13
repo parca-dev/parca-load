@@ -17,6 +17,7 @@ concurrency:
 env:
   # renovate: datasource=go depName=github.com/goreleaser/goreleaser
   GORELEASER_VERSION: v1.11.5
+  IMAGE_NAME: ghcr.io/parca-dev/parca-load
 
 jobs:
   skip-check:
@@ -67,22 +68,12 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: Set Tag
-        run: |
-          echo "goreleaser_current_tag=`git describe --match 'v*' --tags`" >> $GITHUB_ENV
-
-      - name: Get branch name
-        shell: bash
-        run: echo "GITHUB_BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
-
       - name: Build binaries
         uses: goreleaser/goreleaser-action@ff11ca24a9b39f2d36796d1fbd7a4e39c182630a # tag=v3.1.0
         with:
           distribution: goreleaser
           version: ${{ env.GORELEASER_VERSION }}
           args: build --rm-dist --skip-validate --snapshot --debug
-        env:
-          GORELEASER_CURRENT_TAG: "${{ env.goreleaser_current_tag }}"
 
       - name: Archive generated artifacts
         uses: actions/upload-artifact@3cea5372237819ed00197afe530f5a7ea3e805c8 # tag=v3.1.0
@@ -100,8 +91,6 @@ jobs:
     timeout-minutes: 30
     container:
       # https://github.com/containers/podman/tree/main/contrib/podmanimage
-      # Specifying SHA repeatedly fails:
-      # @sha256:421ac576cebff98e90c531e7b9ce4482370ecc7cee59abc2341714031bfb5f43
       image: quay.io/containers/podman:v4.2.1
       options: >-
         --device /dev/fuse:rw
@@ -116,30 +105,26 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3.1.0
 
-      - name: Set up Go
-        uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f # tag=v3.3.0
-        with:
-          go-version-file: 'go.mod'
-          check-latest: true
-
       - uses: actions/download-artifact@fb598a63ae348fa914e94cd0ff38f362e927b741 # tag=v3.0.0
         with:
           name: parca-load-dist-container
           path: dist
 
-      - name: Get branch name
+      - name: Set build environment variables
         shell: bash
-        run: echo "GITHUB_BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/} | tr / -)" >> $GITHUB_ENV
-
-      - name: Get commit
-        shell: bash
-        run: echo "GITHUB_COMMIT=${GITHUB_SHA:0:8}" >> $GITHUB_ENV
+        run: |
+          BRANCH_NAME="$(tr / - <<< "${GITHUB_REF#refs/heads/}")"
+          COMMIT="${GITHUB_SHA:0:8}"
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "COMMIT=${COMMIT}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${BRANCH_NAME}-${COMMIT}" >> $GITHUB_ENV
 
       - name: Build container
-        run: podman build --platform linux/amd64,linux/arm64 --timestamp 0 --manifest "ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}" .
+        run: podman build --platform linux/amd64,linux/arm64 --timestamp 0 --manifest "${IMAGE_NAME}:${IMAGE_TAG}" .
 
       - name: Check images created
-        run: podman images | grep 'ghcr.io/parca-dev/parca-load'
+        run: >-
+          [ -n "$(podman images --noheading --filter="reference=${IMAGE_NAME}:${IMAGE_TAG}")" ]
 
       - name: Install cosign
         if: ${{ github.event_name != 'pull_request' }}
@@ -160,6 +145,6 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: true
         run: |
-          podman manifest push --all "ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}" "docker://ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}"
-          crane digest "ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}"
-          cosign sign --force -a "GIT_HASH=${GITHUB_COMMIT}" -a "GIT_VERSION=${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}" ghcr.io/parca-dev/parca-load@$(shell crane digest "ghcr.io/parca-dev/parca-load:${GITHUB_BRANCH_NAME}-${GITHUB_COMMIT}")
+          podman manifest push --all "${IMAGE_NAME}:${IMAGE_TAG}" "docker://${IMAGE_NAME}:${IMAGE_TAG}"
+          crane digest "${IMAGE_NAME}:${IMAGE_TAG}"
+          cosign sign --force -a "GIT_HASH=${COMMIT}" -a "GIT_VERSION=${IMAGE_TAG}" ghcr.io/parca-dev/parca-load@$(shell crane digest "${IMAGE_NAME}:${IMAGE_TAG}")
