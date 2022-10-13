@@ -5,7 +5,7 @@ RUN mkdir /.cache && touch -t 202101010000.00 /.cache
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
-ARG TARGETVARIANT=v1
+ARG TARGETVARIANT
 
 WORKDIR /app
 COPY dist dist
