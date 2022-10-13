@@ -160,6 +160,6 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: true
         run: |
-          podman manifest push --all ghcr.io/parca-dev/parca-load:{{ .env.GITHUB_BRANCH_NAME }}-{{ .env.GITHUB_COMMIT }} docker://ghcr.io/parca-dev/parca-load:{{ .env.GITHUB_BRANCH_NAME }}-{{ .env.GITHUB_COMMIT }}
-          crane digest ghcr.io/parca-dev/parca-load:{{ .env.GITHUB_BRANCH_NAME }}-{{ .env.GITHUB_COMMIT }}
-          cosign sign --force -a GIT_HASH=$(COMMIT) -a GIT_VERSION={{ .env.GITHUB_BRANCH_NAME }}-{{ .env.GITHUB_COMMIT }} ghcr.io/parca-dev/parca-load@$(shell crane digest ghcr.io/parca-dev/parca-load:{{ .env.GITHUB_BRANCH_NAME }}-{{ .env.GITHUB_COMMIT }})
+          podman manifest push --all ghcr.io/parca-dev/parca-load:{{ env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }} docker://ghcr.io/parca-dev/parca-load:{{ env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }}
+          crane digest ghcr.io/parca-dev/parca-load:{{ .env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }}
+          cosign sign --force -a GIT_HASH=$(COMMIT) -a GIT_VERSION={{ env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }} ghcr.io/parca-dev/parca-load@$(shell crane digest ghcr.io/parca-dev/parca-load:{{ env.GITHUB_BRANCH_NAME }}-{{ env.GITHUB_COMMIT }})
