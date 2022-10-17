@@ -440,9 +440,9 @@ func queryQueryMerge(
 				last := samples[len(samples)-1]
 				timerange := last.Timestamp.AsTime().Sub(first.Timestamp.AsTime())
 
-				start := first.Timestamp.AsTime()
 				end := last.Timestamp.AsTime()
 
+				var start time.Time
 				if timerange > 15*time.Minute {
 					start = end.Add(-15 * time.Minute)
 				} else if timerange > 5*time.Minute {

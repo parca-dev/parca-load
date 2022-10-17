@@ -1,0 +1,146 @@
+name: Container
+
+on:
+  push:
+    branches:
+    - main
+    - release-*
+  pull_request:
+    branches:
+    - main
+    - release-*
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=go depName=github.com/goreleaser/goreleaser
+  GORELEASER_VERSION: v1.11.5
+  IMAGE_NAME: ghcr.io/parca-dev/parca-load
+
+jobs:
+  skip-check:
+    name: Skip check
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      should_skip: ${{ steps.skip-check.outputs.should_skip }}
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - id: skip-check
+        uses: fkirc/skip-duplicate-actions@f11521568414503656a5af807dc3018c012552c4 # tag=v5.2.0
+        with:
+          do_not_skip: '["schedule", "workflow_dispatch"]'
+          paths: |-
+            [
+              "**.go",
+              ".github/workflows/container.yml",
+              "Dockerfile",
+              "go.mod",
+              "go.sum"
+            ]
+          skip_after_successful_duplicate: false
+
+  build-binary:
+    name: Build binary using goreleaser
+    needs: skip-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: ${{ needs.skip-check.outputs.should_skip != 'true' }}
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f # tag=v3.3.0
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+          cache: true
+
+      - name: Build binaries
+        uses: goreleaser/goreleaser-action@ff11ca24a9b39f2d36796d1fbd7a4e39c182630a # tag=v3.1.0
+        with:
+          distribution: goreleaser
+          version: ${{ env.GORELEASER_VERSION }}
+          args: build --rm-dist --skip-validate --snapshot --debug
+
+      - name: Archive generated artifacts
+        uses: actions/upload-artifact@3cea5372237819ed00197afe530f5a7ea3e805c8 # tag=v3.1.0
+        with:
+          name: parca-load-dist-container
+          if-no-files-found: error
+          path: |
+            dist
+            !dist/*.txt
+
+  build-and-push-container:
+    name: Container build and push (when merged)
+    needs: build-binary
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      # https://github.com/containers/podman/tree/main/contrib/podmanimage
+      image: quay.io/containers/podman:v4.2.1
+      options: >-
+        --device /dev/fuse:rw
+        --privileged
+        --security-opt label=disable
+        --security-opt seccomp=unconfined
+    permissions:
+      id-token: write
+      packages: write
+      contents: read
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # tag=v3.1.0
+
+      - uses: actions/download-artifact@fb598a63ae348fa914e94cd0ff38f362e927b741 # tag=v3.0.0
+        with:
+          name: parca-load-dist-container
+          path: dist
+
+      - name: Set build environment variables
+        shell: bash
+        run: |
+          BRANCH_NAME="$(tr / - <<< "${GITHUB_REF#refs/heads/}")"
+          COMMIT="${GITHUB_SHA:0:8}"
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "COMMIT=${COMMIT}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${BRANCH_NAME}-${COMMIT}" >> $GITHUB_ENV
+
+      - name: Build container
+        run: podman build --platform linux/amd64,linux/arm64 --timestamp 0 --manifest "${IMAGE_NAME}:${IMAGE_TAG}" .
+
+      - name: Check images created
+        run: >-
+          [ -n "$(podman images --noheading --filter="reference=${IMAGE_NAME}:${IMAGE_TAG}")" ]
+
+      - name: Install cosign
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: sigstore/cosign-installer@7cc35d7fdbe70d4278a0c96779081e6fac665f88 # tag=v2.8.0
+
+      - name: Install crane
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: imjasonh/setup-crane@e82f1b9a8007d399333baba4d75915558e9fb6a4 # tag=v0.2
+
+      - name: Login to registry
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u parca-dev --password-stdin ghcr.io
+          echo "${{ secrets.QUAY_PASSWORD }}" | cosign login -u "${{ secrets.QUAY_USERNAME }}" --password-stdin quay.io
+
+      - name: Push and sign container
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          COSIGN_EXPERIMENTAL: true
+        run: |
+          podman manifest push --all "${IMAGE_NAME}:${IMAGE_TAG}" "docker://${IMAGE_NAME}:${IMAGE_TAG}"
+          crane digest "${IMAGE_NAME}:${IMAGE_TAG}"
+          cosign sign --force -a "GIT_HASH=${COMMIT}" -a "GIT_VERSION=${IMAGE_TAG}" ghcr.io/parca-dev/parca-load@$(shell crane digest "${IMAGE_NAME}:${IMAGE_TAG}")
