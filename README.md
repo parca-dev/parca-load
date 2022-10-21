@@ -4,6 +4,18 @@ This is a tool that continuously queries Parca instances for their data.
 
 It is based on the Parca gRPC APIs defined on https://buf.build/parca-dev/parca and uses the generated connect-go code via `go.buf.build/bufbuild/connect-go/parca-dev/parca`.
 
+### Installation 
+
+```
+go install github.com/parca-dev/parca-load@latest
+```
+
+or run the container images
+
+```
+docker run -d ghcr.io/parca-dev/parca-load
+```
+
 ### How it works
 
 It runs a goroutine per API type.
