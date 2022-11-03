@@ -3,13 +3,13 @@ module github.com/parca-dev/parca-load
 go 1.18
 
 require (
-	github.com/bufbuild/connect-go v0.1.1
+	github.com/bufbuild/connect-go v1.1.0
+	github.com/matryer/is v1.4.0
 	github.com/oklog/run v1.1.0
 	github.com/prometheus/client_golang v1.12.2
-	github.com/matryer/is v1.4.0
 	github.com/prometheus/prometheus v0.36.2
-	go.buf.build/bufbuild/connect-go/parca-dev/parca v1.3.21
-	google.golang.org/protobuf v1.28.0
+	go.buf.build/bufbuild/connect-go/parca-dev/parca v1.10.33
+	google.golang.org/protobuf v1.28.1
 )
 
 require (
@@ -22,6 +22,6 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.35.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
-	google.golang.org/genproto v0.0.0-20220711200234-e2551ce405a2 // indirect
+	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
+	google.golang.org/genproto v0.0.0-20221027153422-115e99e71e1c // indirect
 )
