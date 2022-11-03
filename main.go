@@ -370,25 +370,28 @@ func queryQuerySingle(
 
 				reportType := queryv1alpha1.QueryRequest_ReportType(rand.Intn(2))
 
-				start := time.Now()
-				_, err := client.Query(ctx, connect.NewRequest[queryv1alpha1.QueryRequest](&queryv1alpha1.QueryRequest{
-					Mode: queryv1alpha1.QueryRequest_MODE_SINGLE_UNSPECIFIED,
-					Options: &queryv1alpha1.QueryRequest_Single{
-						Single: &queryv1alpha1.SingleProfile{
-							Query: series,
-							Time:  sample.Timestamp,
-						},
-					},
-					ReportType: reportType,
-				}))
-				if err != nil {
-					histogram.WithLabelValues(connect.CodeOf(err).String(), reportType.String(), "").Observe(time.Since(start).Seconds())
-					log.Println(err)
-					continue
-				}
+				querySingle(
+					ctx,
+					client,
+					histogram,
+					series,
+					sample.Timestamp,
+					reportType,
+				)
 
-				histogram.WithLabelValues(grpcCodeOK, reportType.String(), "").Observe(time.Since(start).Seconds())
-				log.Printf("querying %s took %v for %s\n", reportType.String(), time.Since(start), series)
+				// If we query a flame graph, we want to not only query
+				// the deprecated old flame graphs but the newer FLAMEGRAPH_TABLE
+				// The query should be the same so that comparing both implementations makes sense.
+				if reportType == 0 {
+					querySingle(
+						ctx,
+						client,
+						histogram,
+						series,
+						sample.Timestamp,
+						queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_TABLE,
+					)
+				}
 			}
 		}
 	}
@@ -399,6 +402,45 @@ func queryQuerySingle(
 	}
 
 	return execute, interrupt
+}
+
+func querySingle(
+	ctx context.Context,
+	client queryv1alpha1connect.QueryServiceClient,
+	histogram *prometheus.HistogramVec,
+	query string,
+	ts *timestamppb.Timestamp,
+	report queryv1alpha1.QueryRequest_ReportType,
+) {
+	start := time.Now()
+
+	_, err := client.Query(ctx, connect.NewRequest(&queryv1alpha1.QueryRequest{
+		Mode: queryv1alpha1.QueryRequest_MODE_SINGLE_UNSPECIFIED,
+		Options: &queryv1alpha1.QueryRequest_Single{
+			Single: &queryv1alpha1.SingleProfile{
+				Query: query,
+				Time:  ts,
+			},
+		},
+		ReportType: report,
+	}))
+
+	if err != nil {
+		histogram.WithLabelValues(
+			connect.CodeOf(err).String(),
+			report.String(),
+			"",
+		).Observe(time.Since(start).Seconds())
+		log.Println(err)
+		return
+	}
+
+	histogram.WithLabelValues(
+		grpcCodeOK,
+		report.String(),
+		"",
+	).Observe(time.Since(start).Seconds())
+	log.Printf("querying %s took %v for %s\n", report.String(), time.Since(start), query)
 }
 
 func queryQueryMerge(
@@ -456,36 +498,30 @@ func queryQueryMerge(
 
 				reportType := queryv1alpha1.QueryRequest_ReportType(rand.Intn(2))
 
-				reqStart := time.Now()
-				_, err := client.Query(ctx, connect.NewRequest[queryv1alpha1.QueryRequest](&queryv1alpha1.QueryRequest{
-					Mode: queryv1alpha1.QueryRequest_MODE_MERGE,
-					Options: &queryv1alpha1.QueryRequest_Merge{
-						Merge: &queryv1alpha1.MergeProfile{
-							Query: series,
-							Start: timestamppb.New(start),
-							End:   timestamppb.New(end),
-						},
-					},
-					ReportType: reportType,
-				}))
-				if err != nil {
-					histogram.WithLabelValues(
-						connect.CodeOf(err).String(),
-						reportType.String(),
-						end.Sub(start).String(),
-					).Observe(time.Since(reqStart).Seconds())
+				queryMerge(
+					ctx,
+					client,
+					histogram,
+					series,
+					start,
+					end,
+					reportType,
+				)
 
-					log.Println(err)
-					continue
+				// If we query a flame graph, we want to not only query
+				// the deprecated old flame graphs but the newer FLAMEGRAPH_TABLE.
+				// The query should be the same so that comparing both implementations makes sense.
+				if reportType == 0 {
+					queryMerge(
+						ctx,
+						client,
+						histogram,
+						series,
+						start,
+						end,
+						queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_TABLE,
+					)
 				}
-
-				histogram.WithLabelValues(
-					grpcCodeOK,
-					reportType.String(),
-					end.Sub(start).String(),
-				).Observe(time.Since(reqStart).Seconds())
-
-				log.Printf("querying %s took %v for %s\n", reportType.String(), time.Since(reqStart), series)
 			}
 		}
 	}
@@ -496,6 +532,47 @@ func queryQueryMerge(
 	}
 
 	return execute, interrupt
+}
+
+func queryMerge(
+	ctx context.Context,
+	client queryv1alpha1connect.QueryServiceClient,
+	histogram *prometheus.HistogramVec,
+	query string,
+	start time.Time,
+	end time.Time,
+	report queryv1alpha1.QueryRequest_ReportType,
+) {
+	reqStart := time.Now()
+	_, err := client.Query(ctx, connect.NewRequest(&queryv1alpha1.QueryRequest{
+		Mode: queryv1alpha1.QueryRequest_MODE_MERGE,
+		Options: &queryv1alpha1.QueryRequest_Merge{
+			Merge: &queryv1alpha1.MergeProfile{
+				Query: query,
+				Start: timestamppb.New(start),
+				End:   timestamppb.New(end),
+			},
+		},
+		ReportType: report,
+	}))
+	if err != nil {
+		histogram.WithLabelValues(
+			connect.CodeOf(err).String(),
+			report.String(),
+			end.Sub(start).String(),
+		).Observe(time.Since(reqStart).Seconds())
+
+		log.Println(err)
+		return
+	}
+
+	histogram.WithLabelValues(
+		grpcCodeOK,
+		report.String(),
+		end.Sub(start).String(),
+	).Observe(time.Since(reqStart).Seconds())
+
+	log.Printf("querying %s took %v for %s\n", report.String(), time.Since(reqStart), query)
 }
 
 type bearerTokenInterceptor struct {
@@ -509,10 +586,10 @@ func (i *bearerTokenInterceptor) WrapUnary(next connect.UnaryFunc) connect.Unary
 	}
 }
 
-func (i *bearerTokenInterceptor) WrapStreamContext(ctx context.Context) context.Context { return ctx }
-func (i *bearerTokenInterceptor) WrapStreamSender(ctx context.Context, sender connect.Sender) connect.Sender {
-	return sender
+func (i *bearerTokenInterceptor) WrapStreamingClient(client connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return client
 }
-func (i *bearerTokenInterceptor) WrapStreamReceiver(ctx context.Context, receiver connect.Receiver) connect.Receiver {
-	return receiver
+
+func (i *bearerTokenInterceptor) WrapStreamingHandler(handler connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return handler
 }
