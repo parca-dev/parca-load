@@ -2,7 +2,7 @@ before:
   hooks:
     - go mod tidy
 builds:
-  - main: ./cmd/parca-load/
+  - main: .
     id: "parca-load"
     binary: parca-load
     # https://goreleaser.com/customization/build/#reproducible-builds
