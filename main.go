@@ -37,6 +37,7 @@ func main() {
 	token := flag.String("token", "", "A bearer token that can be send along each request")
 	vaultURL := flag.String("vault-url", "", "The URL for parca-load to reach Vault on")
 	vaultTokenPath := flag.String("vault-token-path", "parca-load/token", "The path in Vault to find the parca-load token")
+	vaultRole := flag.String("vault-role", "parca-load", "The role name of parca-load in Vault")
 	flag.Parse()
 
 	ctx, stop := context.WithCancel(context.Background())
@@ -53,8 +54,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("unable to initialize Vault client: %v", err)
 		}
-		// Hardcoded role for now. Please open an issue if there's problem.
-		kubernetesAuth, err := auth.NewKubernetesAuth("parca-load")
+		kubernetesAuth, err := auth.NewKubernetesAuth(*vaultRole)
 		if err != nil {
 			log.Fatalf("unable to initialize Kubernetes auth method: %v", err)
 		}
@@ -74,7 +74,7 @@ func main() {
 
 		tokenContent, ok := secret.Data["token"].(string)
 		if !ok {
-			log.Fatalf("value type assertion failed: %T %#v", secret.Data["password"], secret.Data["password"])
+			log.Fatalf("value type assertion failed: %T %#v", secret.Data["token"], secret.Data["token"])
 		}
 
 		// Override the flag content with the token from Vault.
