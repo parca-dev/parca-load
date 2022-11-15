@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/bufbuild/connect-go"
+	vault "github.com/hashicorp/vault/api"
+	auth "github.com/hashicorp/vault/api/auth/kubernetes"
 	"github.com/oklog/run"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -33,7 +35,51 @@ func main() {
 	url := flag.String("url", "http://localhost:7070", "The URL for the Parca instance to query")
 	addr := flag.String("addr", "127.0.0.1:7171", "The address the HTTP server binds to")
 	token := flag.String("token", "", "A bearer token that can be send along each request")
+	vaultURL := flag.String("vault-url", "", "The URL for parca-load to reach Vault on")
+	vaultTokenPath := flag.String("vault-token-path", "parca-load/token", "The path in Vault to find the parca-load token")
 	flag.Parse()
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	// If a vault URL is given we'll try to get the token from Vault.
+	// If successful the contents are written in place of the token flag.
+	// Further down the token is retrieved from that flag's content.
+	if *vaultURL != "" {
+		config := vault.DefaultConfig()
+		config.Address = *vaultURL
+
+		client, err := vault.NewClient(config)
+		if err != nil {
+			log.Fatalf("unable to initialize Vault client: %v", err)
+		}
+		// Hardcoded role for now. Please open an issue if there's problem.
+		kubernetesAuth, err := auth.NewKubernetesAuth("parca-load")
+		if err != nil {
+			log.Fatalf("unable to initialize Kubernetes auth method: %v", err)
+		}
+		login, err := client.Auth().Login(ctx, kubernetesAuth)
+		if err != nil {
+			log.Fatalf("unable to log in with Kubernetes auth: %v", err)
+		}
+		if login == nil {
+			log.Fatal("no auth info was returned after login")
+		}
+
+		// get secret from Vault, from the default mount path for KV v2 in dev mode, "secret"
+		secret, err := client.KVv2("secret").Get(ctx, *vaultTokenPath)
+		if err != nil {
+			log.Fatalf("unable to read secret: %v", err)
+		}
+
+		tokenContent, ok := secret.Data["token"].(string)
+		if !ok {
+			log.Fatalf("value type assertion failed: %T %#v", secret.Data["password"], secret.Data["password"])
+		}
+
+		// Override the flag content with the token from Vault.
+		*token = tokenContent
+	}
 
 	clientOptions := []connect.ClientOption{
 		connect.WithGRPCWeb(),
@@ -47,9 +93,6 @@ func main() {
 		*url,
 		clientOptions...,
 	)
-
-	ctx, stop := context.WithCancel(context.Background())
-	defer stop()
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector())
