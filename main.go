@@ -225,7 +225,6 @@ func queryValues(
 					Start:     timestamppb.New(time.Now().Add(-1 * time.Hour)),
 					End:       timestamppb.New(time.Now()),
 				}))
-
 				if err != nil {
 					histogram.WithLabelValues(connect.CodeOf(err).String()).Observe(time.Since(start).Seconds())
 					log.Println("failed to make values request", err)
@@ -319,12 +318,13 @@ func queryQueryRange(
 		Name:    "parca_client_queryrange_seconds",
 		Help:    "The seconds it takes to make QueryRange requests against a Parca",
 		Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10},
-	}, []string{"grpc_code"})
+	}, []string{"grpc_code", "range"})
 
 	ctx, cancel := context.WithCancel(ctx)
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(30 * time.Second)
 
 	execute := func() error {
+	executeLoop:
 		for {
 			select {
 			case <-ctx.Done():
@@ -340,28 +340,24 @@ func queryQueryRange(
 					continue
 				}
 
-				start := time.Now()
-				resp, err := client.QueryRange(ctx, connect.NewRequest[queryv1alpha1.QueryRangeRequest](&queryv1alpha1.QueryRangeRequest{
-					Query: pt,
-					Start: timestamppb.New(time.Now().Add(-15 * time.Minute)),
-					End:   timestamppb.New(time.Now()),
-				}))
-				if err != nil {
-					histogram.WithLabelValues(connect.CodeOf(err).String()).Observe(time.Since(start).Seconds())
-					log.Println(err)
-					continue
-				}
-				histogram.WithLabelValues(grpcCodeOK).Observe(time.Since(start).Seconds())
-				log.Printf("querying range took %v for %s and got %d series\n", time.Since(start), pt, len(resp.Msg.Series))
+				// Request query ranges from shortest to longest: 15m, 1h, 3h, 1d, 1w
+				for _, tr := range []time.Duration{
+					15 * time.Minute,
+					time.Hour,
+					3 * time.Hour,
+					24 * time.Hour,
+					7 * 24 * time.Hour,
+				} {
+					end := time.Now()
+					start := end.Add(-1 * tr) // -1 to go back in time
 
-				for _, series := range resp.Msg.Series {
-					lset := labels.Labels{}
-					for _, l := range series.Labelset.Labels {
-						lset = append(lset, labels.Label{Name: l.Name, Value: l.Value})
+					timeRange := queryRange(ctx, client, histogram, pt, start, end, seriesStore)
+
+					// If the longestDuration is fewer than 90% of this requested time range,
+					// we don't query for the next longer time range.
+					if timeRange.Seconds() < end.Sub(start).Seconds()*0.9 {
+						continue executeLoop
 					}
-					sort.Sort(lset)
-
-					seriesStore.Store(pt+lset.String(), series.Samples)
 				}
 			}
 		}
@@ -373,6 +369,50 @@ func queryQueryRange(
 	}
 
 	return execute, interrupt
+}
+
+func queryRange(
+	ctx context.Context,
+	client queryv1alpha1connect.QueryServiceClient,
+	histogram *prometheus.HistogramVec,
+	query string,
+	start, end time.Time,
+	seriesStore SeriesStore,
+) time.Duration {
+	begin := time.Now()
+	resp, err := client.QueryRange(ctx, connect.NewRequest[queryv1alpha1.QueryRangeRequest](&queryv1alpha1.QueryRangeRequest{
+		Query: query,
+		Start: timestamppb.New(start),
+		End:   timestamppb.New(end),
+	}))
+	if err != nil {
+		histogram.WithLabelValues(connect.CodeOf(err).String(), end.Sub(start).String()).Observe(time.Since(begin).Seconds())
+		log.Println(err)
+		return 0
+	}
+	histogram.WithLabelValues(grpcCodeOK, end.Sub(start).String()).Observe(time.Since(begin).Seconds())
+	log.Printf("querying range took %v for %s %s and got %d series\n", time.Since(begin), query, end.Sub(start).String(), len(resp.Msg.Series))
+
+	var longestTimeRange time.Duration
+
+	for _, series := range resp.Msg.Series {
+		lset := labels.Labels{}
+		for _, l := range series.Labelset.Labels {
+			lset = append(lset, labels.Label{Name: l.Name, Value: l.Value})
+		}
+		sort.Sort(lset)
+
+		seriesStore.Store(query+lset.String(), series.Samples)
+
+		first := series.Samples[0]
+		last := series.Samples[len(series.Samples)-1]
+		timerange := last.Timestamp.AsTime().Sub(first.Timestamp.AsTime())
+		if timerange > longestTimeRange {
+			longestTimeRange = timerange
+		}
+	}
+
+	return longestTimeRange
 }
 
 func queryQuerySingle(
@@ -467,7 +507,6 @@ func querySingle(
 		},
 		ReportType: report,
 	}))
-
 	if err != nil {
 		histogram.WithLabelValues(
 			connect.CodeOf(err).String(),
@@ -502,6 +541,7 @@ func queryQueryMerge(
 	ctx, cancel := context.WithCancel(ctx)
 	ticker := time.NewTicker(15 * time.Second)
 	execute := func() error {
+	executeLoop:
 		for {
 			select {
 			case <-ctx.Done():
@@ -510,51 +550,55 @@ func queryQueryMerge(
 				var (
 					series  string
 					samples []*queryv1alpha1.MetricsSample
+
+					timeRange time.Duration
+					last      time.Time
 				)
-				seriesStore.Range(func(k string, v []*queryv1alpha1.MetricsSample) bool {
-					series = k
-					samples = v
-					return false
-				})
 
-				if series == "" || len(samples) == 0 {
-					continue
-				}
+				// Retry until we find samples with more than two timestamps.
+				retries := -1
+				for {
+					retries++
+					// If we need more than 100 retries we simply abort and try again with the next tick.
+					// This will mostly occur during startup for either parca or parca-load.
+					if retries > 100 {
+						continue executeLoop
+					}
 
-				first := samples[0]
-				last := samples[len(samples)-1]
-				timerange := last.Timestamp.AsTime().Sub(first.Timestamp.AsTime())
+					seriesStore.Range(func(k string, v []*queryv1alpha1.MetricsSample) bool {
+						series = k
+						samples = v
+						return false
+					})
 
-				end := last.Timestamp.AsTime()
+					if series == "" || len(samples) == 0 || len(samples) == 1 {
+						continue
+					}
 
-				var start time.Time
-				if timerange > 15*time.Minute {
-					start = end.Add(-15 * time.Minute)
-				} else if timerange > 5*time.Minute {
-					start = end.Add(-5 * time.Minute)
-				} else if timerange > time.Minute {
-					start = end.Add(-1 * time.Minute)
-				} else {
-					// Too little data we'll ignore it and not make a merge request this time.
-					continue
+					first := samples[0].Timestamp.AsTime()
+					last = samples[len(samples)-1].Timestamp.AsTime()
+					timeRange = last.Sub(first)
+
+					if timeRange > 0 {
+						break
+					}
 				}
 
 				reportType := queryv1alpha1.QueryRequest_ReportType(rand.Intn(2))
 
-				queryMerge(
-					ctx,
-					client,
-					histogram,
-					series,
-					start,
-					end,
-					reportType,
-				)
+				// Request merges from shortest to longest: 5m, 15m, 1h
+				for _, tr := range []time.Duration{
+					5 * time.Minute,
+					15 * time.Minute,
+					time.Hour,
+				} {
+					if timeRange < tr {
+						continue executeLoop
+					}
 
-				// If we query a flame graph, we want to not only query
-				// the deprecated old flame graphs but the newer FLAMEGRAPH_TABLE.
-				// The query should be the same so that comparing both implementations makes sense.
-				if reportType == 0 {
+					end := last
+					start := end.Add(-1 * tr) // -1 to go back in time
+
 					queryMerge(
 						ctx,
 						client,
@@ -562,8 +606,23 @@ func queryQueryMerge(
 						series,
 						start,
 						end,
-						queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_TABLE,
+						reportType,
 					)
+
+					// If we query a flame graph, we want to not only query
+					// the deprecated old flame graphs but the newer FLAMEGRAPH_TABLE.
+					// The query should be the same so that comparing both implementations makes sense.
+					if reportType == 0 {
+						queryMerge(
+							ctx,
+							client,
+							histogram,
+							series,
+							start,
+							end,
+							queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_TABLE,
+						)
+					}
 				}
 			}
 		}
