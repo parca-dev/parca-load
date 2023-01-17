@@ -38,6 +38,14 @@ func main() {
 	vaultURL := flag.String("vault-url", "", "The URL for parca-load to reach Vault on")
 	vaultTokenPath := flag.String("vault-token-path", "parca-load/token", "The path in Vault to find the parca-load token")
 	vaultRole := flag.String("vault-role", "parca-load", "The role name of parca-load in Vault")
+
+	intervalProfileTypes := flag.Duration("interval-profile-types", 10*time.Second, "How frequent the ProfileTypes should be queried")
+	intervalLabels := flag.Duration("interval-labels", 5*time.Second, "How frequent the Labels should be queried")
+	intervalValues := flag.Duration("interval-values", 5*time.Second, "How frequent the Values should be queried")
+	intervalQueryRange := flag.Duration("interval-query-range", 30*time.Second, "How frequent the QueryRange should be queried")
+	intervalQuerySingle := flag.Duration("interval-query-single", 10*time.Second, "How frequent a single Query should be queried")
+	intervalQueryMerge := flag.Duration("interval-query-merge", 15*time.Second, "How frequent a merge Query should be queried")
+
 	flag.Parse()
 
 	ctx, stop := context.WithCancel(context.Background())
@@ -98,21 +106,22 @@ func main() {
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
-	labels := sync.NewExpireMap[string, struct{}](time.Minute)
-	profileTypes := sync.NewExpireMap[string, struct{}](time.Minute)
-	series := sync.NewExpireMap[string, []*queryv1alpha1.MetricsSample](30 * time.Second)
+	// Expire the stores values in the maps depending on the interval they are queried at.
+	labels := sync.NewExpireMap[string, struct{}](*intervalLabels * 4)
+	profileTypes := sync.NewExpireMap[string, struct{}](*intervalProfileTypes * 4)
+	series := sync.NewExpireMap[string, []*queryv1alpha1.MetricsSample](*intervalQueryRange * 2)
 
 	var gr run.Group
 
 	gr.Add(run.SignalHandler(ctx, os.Interrupt, os.Kill))
 	gr.Add(internalServer(reg, *addr))
 
-	gr.Add(queryLabels(ctx, client, reg, labels))
-	gr.Add(queryValues(ctx, client, reg, labels))
-	gr.Add(queryProfileTypes(ctx, client, reg, profileTypes))
-	gr.Add(queryQueryRange(ctx, client, reg, profileTypes, series))
-	gr.Add(queryQuerySingle(ctx, client, reg, series))
-	gr.Add(queryQueryMerge(ctx, client, reg, series))
+	gr.Add(queryLabels(ctx, client, reg, labels, *intervalLabels))
+	gr.Add(queryValues(ctx, client, reg, labels, *intervalValues))
+	gr.Add(queryProfileTypes(ctx, client, reg, profileTypes, *intervalProfileTypes))
+	gr.Add(queryQueryRange(ctx, client, reg, profileTypes, series, *intervalQueryRange))
+	gr.Add(queryQuerySingle(ctx, client, reg, series, *intervalQuerySingle))
+	gr.Add(queryQueryMerge(ctx, client, reg, series, *intervalQueryMerge))
 
 	if err := gr.Run(); err != nil {
 		log.Fatal(err)
@@ -149,6 +158,7 @@ func queryLabels(
 	client queryv1alpha1connect.QueryServiceClient,
 	reg *prometheus.Registry,
 	labelsStore LabelStore,
+	interval time.Duration,
 ) (func() error, func(error)) {
 	histogram := promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "parca_client_labels_seconds",
@@ -157,7 +167,7 @@ func queryLabels(
 	}, []string{"grpc_code"})
 
 	ctx, cancel := context.WithCancel(ctx)
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(interval)
 	execute := func() error {
 		for {
 			select {
@@ -193,6 +203,7 @@ func queryValues(
 	client queryv1alpha1connect.QueryServiceClient,
 	reg *prometheus.Registry,
 	labelsStore LabelStore,
+	interval time.Duration,
 ) (func() error, func(error)) {
 	histogram := promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "parca_client_values_seconds",
@@ -201,7 +212,7 @@ func queryValues(
 	}, []string{"grpc_code"})
 
 	ctx, cancel := context.WithCancel(ctx)
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(interval)
 	execute := func() error {
 		for {
 			select {
@@ -254,6 +265,7 @@ func queryProfileTypes(
 	client queryv1alpha1connect.QueryServiceClient,
 	reg *prometheus.Registry,
 	profileTypes ProfileTypeStore,
+	interval time.Duration,
 ) (func() error, func(error)) {
 	histogram := promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "parca_client_profiletypes_seconds",
@@ -262,7 +274,7 @@ func queryProfileTypes(
 	}, []string{"grpc_code"})
 
 	ctx, cancel := context.WithCancel(ctx)
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(interval)
 	execute := func() error {
 		for {
 			select {
@@ -313,6 +325,7 @@ func queryQueryRange(
 	reg *prometheus.Registry,
 	profileTypesStore ProfileTypeStore,
 	seriesStore SeriesStore,
+	interval time.Duration,
 ) (func() error, func(error)) {
 	histogram := promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "parca_client_queryrange_seconds",
@@ -321,7 +334,7 @@ func queryQueryRange(
 	}, []string{"grpc_code", "range"})
 
 	ctx, cancel := context.WithCancel(ctx)
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(interval)
 
 	execute := func() error {
 	executeLoop:
@@ -420,6 +433,7 @@ func queryQuerySingle(
 	client queryv1alpha1connect.QueryServiceClient,
 	reg *prometheus.Registry,
 	seriesStore SeriesStore,
+	interval time.Duration,
 ) (func() error, func(error)) {
 	histogram := promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
 		Name:        "parca_client_query_seconds",
@@ -429,7 +443,7 @@ func queryQuerySingle(
 	}, []string{"grpc_code", "report_type", "range"})
 
 	ctx, cancel := context.WithCancel(ctx)
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(interval)
 	execute := func() error {
 		for {
 			select {
@@ -530,6 +544,7 @@ func queryQueryMerge(
 	client queryv1alpha1connect.QueryServiceClient,
 	reg *prometheus.Registry,
 	seriesStore SeriesStore,
+	interval time.Duration,
 ) (func() error, func(error)) {
 	histogram := promauto.With(reg).NewHistogramVec(prometheus.HistogramOpts{
 		Name:        "parca_client_query_seconds",
@@ -539,7 +554,7 @@ func queryQueryMerge(
 	}, []string{"grpc_code", "report_type", "range"})
 
 	ctx, cancel := context.WithCancel(ctx)
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(interval)
 	execute := func() error {
 	executeLoop:
 		for {
