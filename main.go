@@ -121,7 +121,7 @@ func main() {
 	gr.Add(queryProfileTypes(ctx, client, reg, profileTypes, *intervalProfileTypes))
 	gr.Add(queryQueryRange(ctx, client, reg, profileTypes, series, *intervalQueryRange))
 	gr.Add(queryQuerySingle(ctx, client, reg, series, *intervalQuerySingle))
-	gr.Add(queryQueryMerge(ctx, client, reg, series, *intervalQueryMerge))
+	gr.Add(queryQueryMerge(ctx, client, reg, profileTypes, series, *intervalQueryMerge))
 
 	if err := gr.Run(); err != nil {
 		log.Fatal(err)
@@ -353,12 +353,9 @@ func queryQueryRange(
 					continue
 				}
 
-				// Request query ranges from shortest to longest: 15m, 1h, 3h, 1d, 1w
+				// Request query ranges from shortest to longest: 15m, 1w.
 				for _, tr := range []time.Duration{
 					15 * time.Minute,
-					time.Hour,
-					3 * time.Hour,
-					24 * time.Hour,
 					7 * 24 * time.Hour,
 				} {
 					end := time.Now()
@@ -536,13 +533,14 @@ func querySingle(
 		report.String(),
 		"",
 	).Observe(time.Since(start).Seconds())
-	log.Printf("querying %s took %v for %s\n", report.String(), time.Since(start), query)
+	log.Printf("querying single %s took %v for %s\n", report.String(), time.Since(start), query)
 }
 
 func queryQueryMerge(
 	ctx context.Context,
 	client queryv1alpha1connect.QueryServiceClient,
 	reg *prometheus.Registry,
+	profileTypesStore ProfileTypeStore,
 	seriesStore SeriesStore,
 	interval time.Duration,
 ) (func() error, func(error)) {
@@ -556,37 +554,35 @@ func queryQueryMerge(
 	ctx, cancel := context.WithCancel(ctx)
 	ticker := time.NewTicker(interval)
 	execute := func() error {
-	executeLoop:
 		for {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-ticker.C:
 				var (
-					series  string
 					samples []*queryv1alpha1.MetricsSample
 
 					timeRange time.Duration
 					last      time.Time
 				)
 
-				// Retry until we find samples with more than two timestamps.
-				retries := -1
-				for {
-					retries++
-					// If we need more than 100 retries we simply abort and try again with the next tick.
-					// This will mostly occur during startup for either parca or parca-load.
-					if retries > 100 {
-						continue executeLoop
-					}
+				pt := ""
+				profileTypesStore.Range(func(k string, _ struct{}) bool {
+					pt = k
+					return false
+				})
+				if pt == "" {
+					continue
+				}
 
+				// Retry until we find samples with more than two timestamps.
+				for retries := 0; retries < 100; retries++ {
 					seriesStore.Range(func(k string, v []*queryv1alpha1.MetricsSample) bool {
-						series = k
 						samples = v
 						return false
 					})
 
-					if series == "" || len(samples) == 0 || len(samples) == 1 {
+					if len(samples) < 2 {
 						continue
 					}
 
@@ -598,17 +594,26 @@ func queryQueryMerge(
 						break
 					}
 				}
+				if !(timeRange > 0) {
+					// Time range not found, try again.
+					continue
+				}
 
 				reportType := queryv1alpha1.QueryRequest_ReportType(rand.Intn(2))
 
-				// Request merges from shortest to longest: 5m, 15m, 1h
+				// Request merges over 15 minutes and 7 days.
 				for _, tr := range []time.Duration{
-					5 * time.Minute,
 					15 * time.Minute,
-					time.Hour,
+					7 * 24 * time.Hour,
 				} {
 					if timeRange < tr {
-						continue executeLoop
+						log.Println(
+							"skipping query merge request for time range",
+							tr,
+							"due to not enough data. Current range is:",
+							timeRange,
+						)
+						break
 					}
 
 					end := last
@@ -618,7 +623,7 @@ func queryQueryMerge(
 						ctx,
 						client,
 						histogram,
-						series,
+						pt,
 						start,
 						end,
 						reportType,
@@ -632,7 +637,7 @@ func queryQueryMerge(
 							ctx,
 							client,
 							histogram,
-							series,
+							pt,
 							start,
 							end,
 							queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_TABLE,
@@ -679,7 +684,7 @@ func queryMerge(
 			end.Sub(start).String(),
 		).Observe(time.Since(reqStart).Seconds())
 
-		log.Println(err)
+		log.Println("failed to make query merge request", err)
 		return
 	}
 
@@ -689,7 +694,7 @@ func queryMerge(
 		end.Sub(start).String(),
 	).Observe(time.Since(reqStart).Seconds())
 
-	log.Printf("querying %s took %v for %s\n", report.String(), time.Since(reqStart), query)
+	log.Printf("querying merge %s took %v for %s\n", report.String(), time.Since(reqStart), query)
 }
 
 type bearerTokenInterceptor struct {
