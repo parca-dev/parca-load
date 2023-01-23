@@ -550,7 +550,10 @@ func queryQueryMerge(
 		Name:        "parca_client_query_seconds",
 		Help:        "The seconds it takes to make Query requests against a Parca",
 		ConstLabels: map[string]string{"mode": "merge"},
-		Buckets:     []float64{0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5},
+		Buckets: []float64{
+			0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+			12, 13, 14, 15, 16, 17, 18, 19, 20,
+		},
 	}, []string{"grpc_code", "report_type", "range"})
 
 	ctx, cancel := context.WithCancel(ctx)
