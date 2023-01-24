@@ -38,6 +38,7 @@ func main() {
 	vaultURL := flag.String("vault-url", "", "The URL for parca-load to reach Vault on")
 	vaultTokenPath := flag.String("vault-token-path", "parca-load/token", "The path in Vault to find the parca-load token")
 	vaultRole := flag.String("vault-role", "parca-load", "The role name of parca-load in Vault")
+	clientTimeout := flag.Duration("client-timeout", 10*time.Second, "Timeout for requests to the Parca instance")
 
 	intervalProfileTypes := flag.Duration("interval-profile-types", 10*time.Second, "How frequent the ProfileTypes should be queried")
 	intervalLabels := flag.Duration("interval-labels", 5*time.Second, "How frequent the Labels should be queried")
@@ -97,7 +98,7 @@ func main() {
 	}
 
 	client := queryv1alpha1connect.NewQueryServiceClient(
-		&http.Client{Timeout: 10 * time.Second},
+		&http.Client{Timeout: *clientTimeout},
 		*url,
 		clientOptions...,
 	)
