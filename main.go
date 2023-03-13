@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"sort"
 	"time"
@@ -125,6 +126,10 @@ func main() {
 	gr.Add(queryQueryMerge(ctx, client, reg, profileTypes, series, *intervalQueryMerge))
 
 	if err := gr.Run(); err != nil {
+		if _, ok := err.(run.SignalError); ok {
+			log.Println("terminating:", err)
+			return
+		}
 		log.Fatal(err)
 	}
 }
@@ -132,6 +137,7 @@ func main() {
 func internalServer(reg *prometheus.Registry, addr string) (func() error, func(error)) {
 	handler := http.NewServeMux()
 	handler.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	handler.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
 
 	server := http.Server{
 		Addr:    addr,
