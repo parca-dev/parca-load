@@ -126,6 +126,10 @@ func main() {
 	gr.Add(queryQueryMerge(ctx, client, reg, profileTypes, series, *intervalQueryMerge))
 
 	if err := gr.Run(); err != nil {
+		if _, ok := err.(run.SignalError); ok {
+			log.Println("terminating:", err)
+			return
+		}
 		log.Fatal(err)
 	}
 }
