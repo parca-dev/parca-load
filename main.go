@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"sort"
 	"time"
@@ -132,6 +133,7 @@ func main() {
 func internalServer(reg *prometheus.Registry, addr string) (func() error, func(error)) {
 	handler := http.NewServeMux()
 	handler.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	handler.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
 
 	server := http.Server{
 		Addr:    addr,
