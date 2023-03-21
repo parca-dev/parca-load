@@ -6,11 +6,11 @@ require (
 	github.com/bufbuild/connect-go v1.1.0
 	github.com/hashicorp/vault/api v1.8.2
 	github.com/hashicorp/vault/api/auth/kubernetes v0.3.0
-	github.com/matryer/is v1.4.0
 	github.com/oklog/run v1.1.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/prometheus v0.36.2
 	go.buf.build/bufbuild/connect-go/parca-dev/parca v1.10.33
+	golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0
 	google.golang.org/protobuf v1.28.1
 )
 
@@ -59,7 +59,7 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // indirect
 	golang.org/x/net v0.0.0-20221014081412-f15817d10f9b // indirect
-	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
+	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65 // indirect
 	google.golang.org/genproto v0.0.0-20221027153422-115e99e71e1c // indirect
