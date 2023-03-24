@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/bufbuild/connect-go"
@@ -95,7 +96,7 @@ func main() {
 	querier := NewQuerier(reg, client)
 
 	var gr run.Group
-	gr.Add(run.SignalHandler(ctx, os.Interrupt, os.Kill))
+	gr.Add(run.SignalHandler(ctx, os.Interrupt, syscall.SIGTERM))
 
 	httpServer := newHTTPServer(reg, *addr)
 	gr.Add(
