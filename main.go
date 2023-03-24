@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/bufbuild/connect-go"
@@ -95,8 +96,22 @@ func main() {
 	querier := NewQuerier(reg, client)
 
 	var gr run.Group
-	gr.Add(run.SignalHandler(ctx, os.Interrupt, os.Kill))
-	gr.Add(internalServer(ctx, reg, *addr))
+	gr.Add(run.SignalHandler(ctx, os.Interrupt, syscall.SIGTERM))
+
+	httpServer := newHTTPServer(reg, *addr)
+	gr.Add(
+		func() error {
+			log.Printf("HTTP server: running at %s\n", *addr)
+			return httpServer.ListenAndServe()
+		},
+		func(error) {
+			log.Println("HTTP server: stopping")
+			shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			_ = httpServer.Shutdown(shutdownCtx)
+			log.Println("HTTP server: stopped")
+		},
+	)
 	gr.Add(
 		func() error {
 			querier.Run(ctx, *queryInterval)
@@ -118,27 +133,16 @@ func main() {
 	}
 }
 
-func internalServer(ctx context.Context, reg *prometheus.Registry, addr string) (func() error, func(error)) {
+func newHTTPServer(reg *prometheus.Registry, addr string) *http.Server {
 	handler := http.NewServeMux()
 	handler.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	handler.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
 
-	server := http.Server{
+	server := &http.Server{
 		Addr:    addr,
 		Handler: handler,
 	}
-
-	execute := func() error {
-		log.Println("Running http server", addr)
-		return server.ListenAndServe()
-	}
-	interrupt := func(err error) {
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		_ = server.Shutdown(ctx)
-	}
-
-	return execute, interrupt
+	return server
 }
 
 type bearerTokenInterceptor struct {
