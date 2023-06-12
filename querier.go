@@ -113,7 +113,7 @@ func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServi
 		client:          client,
 		rng:             rand.New(rand.NewSource(time.Now().UnixNano())),
 		series:          make(map[string]timestampRange),
-		queryTimeRanges: []time.Duration{15 * time.Minute, 7 * 24 * time.Hour},
+		queryTimeRanges: []time.Duration{15 * time.Minute, 12 * time.Hour, 7 * 24 * time.Hour},
 		reportTypes: []queryv1alpha1.QueryRequest_ReportType{
 			queryv1alpha1.QueryRequest_REPORT_TYPE_PPROF,
 			// nolint:staticcheck
