@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"log"
 	"math/rand"
 	"sort"
@@ -18,9 +19,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+const numHorizontalPixelsOn8KDisplay = 7680
+
 // Trim anything that can't be displayed by an 8K display (7680 horizontal
 // pixels). This is a var because the proto request requires an address.
-var nodeTrimThreshold = float32(1) / 7680
+var nodeTrimThreshold = float32(1) / numHorizontalPixelsOn8KDisplay
 
 type querierMetrics struct {
 	labelsHistogram       *prometheus.HistogramVec
@@ -237,6 +240,7 @@ func (q *Querier) queryRange(ctx context.Context) {
 			Query: profileType,
 			Start: timestamppb.New(rangeStart),
 			End:   timestamppb.New(rangeEnd),
+			Step:  durationpb.New(time.Duration(tr.Nanoseconds() / numHorizontalPixelsOn8KDisplay)),
 		}))
 		latency := time.Since(queryStart)
 		if err != nil {
