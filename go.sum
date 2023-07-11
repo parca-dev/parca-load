@@ -50,8 +50,8 @@ github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+Ce
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/bgentry/speakeasy v0.1.0/go.mod h1:+zsyZBPWlz7T6j88CTgSN5bM796AkVf0kBD4zp0CCIs=
-github.com/bufbuild/connect-go v1.1.0 h1:AUgqqO2ePdOJSpPOep6BPYz5v2moW1Lb8sQh0EeRzQ8=
-github.com/bufbuild/connect-go v1.1.0/go.mod h1:9iNvh/NOsfhNBUH5CtvXeVUskQO1xsrEviH7ZArwZ3I=
+github.com/bufbuild/connect-go v1.3.0 h1:Ocib+p/dj3eVJFp+YxRxnoW1Itw8ZGlNKx3VxtNWS7A=
+github.com/bufbuild/connect-go v1.3.0/go.mod h1:9iNvh/NOsfhNBUH5CtvXeVUskQO1xsrEviH7ZArwZ3I=
 github.com/cenkalti/backoff/v3 v3.0.0 h1:ske+9nBpD9qZsTBoF41nW5L+AIuFBKMeze18XQ3eG1c=
 github.com/cenkalti/backoff/v3 v3.0.0/go.mod h1:cIeZDE3IrqwwJl6VUwCN6trj1oXrTS4rc0ij+ULvLYs=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
@@ -351,8 +351,8 @@ github.com/tv42/httpunix v0.0.0-20150427012821-b75d8614f926/go.mod h1:9ESjWnEqri
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
-go.buf.build/bufbuild/connect-go/parca-dev/parca v1.10.33 h1:g0+vh5Qr11iRW17A1q23sxP8xs7eRa7Ddrg/KsHpiAw=
-go.buf.build/bufbuild/connect-go/parca-dev/parca v1.10.33/go.mod h1:vlP7VpOraqgoljaRGXgVBJ82kOQ2oMVs05OWp5Ex8LM=
+go.buf.build/bufbuild/connect-go/parca-dev/parca v1.12.49 h1:Px4wXdO26MOp4jjAT+9E5tI1uP8f30Rs5Wxb1dcyw7Q=
+go.buf.build/bufbuild/connect-go/parca-dev/parca v1.12.49/go.mod h1:8yZINDtM6b/IYzbxebzNZ/Z7oM2bvvXxJQF9NYUlTO8=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=
 go.opencensus.io v0.22.0/go.mod h1:+kGneAE2xo2IficOXnaByMWTGM9T73dGwxeWcUqIpI8=
 go.opencensus.io v0.22.2/go.mod h1:yxeiOL68Rb0Xd1ddK5vPZ/oVn4vY4Ynel7k9FzqtOIw=

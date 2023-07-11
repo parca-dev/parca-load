@@ -3,13 +3,13 @@ module github.com/parca-dev/parca-load
 go 1.18
 
 require (
-	github.com/bufbuild/connect-go v1.1.0
+	github.com/bufbuild/connect-go v1.3.0
 	github.com/hashicorp/vault/api v1.8.2
 	github.com/hashicorp/vault/api/auth/kubernetes v0.3.0
 	github.com/oklog/run v1.1.0
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/prometheus v0.36.2
-	go.buf.build/bufbuild/connect-go/parca-dev/parca v1.10.33
+	go.buf.build/bufbuild/connect-go/parca-dev/parca v1.12.49
 	golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0
 	google.golang.org/protobuf v1.28.1
 )
