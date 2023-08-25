@@ -124,9 +124,8 @@ func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServi
 		queryTimeRanges: []time.Duration{15 * time.Minute, 12 * time.Hour, 7 * 24 * time.Hour},
 		reportTypes: []queryv1alpha1.QueryRequest_ReportType{
 			queryv1alpha1.QueryRequest_REPORT_TYPE_PPROF,
-			// nolint:staticcheck
-			queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_UNSPECIFIED,
-			queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_TABLE,
+			queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_ARROW,
+			queryv1alpha1.QueryRequest_REPORT_TYPE_TABLE_ARROW,
 		},
 	}
 }
