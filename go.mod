@@ -1,6 +1,6 @@
 module github.com/parca-dev/parca-load
 
-go 1.18
+go 1.19
 
 require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.11.0-20230823175648-8e6b94c22fce.1
