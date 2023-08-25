@@ -10,7 +10,7 @@ import (
 
 	"buf.build/gen/go/parca-dev/parca/connectrpc/go/parca/query/v1alpha1/queryv1alpha1connect"
 	"buf.build/gen/go/parca-dev/parca/protocolbuffers/go/parca/query/v1alpha1"
-	"github.com/bufbuild/connect-go"
+	"connectrpc.com/connect"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/prometheus/model/labels"
@@ -161,7 +161,7 @@ func (q *Querier) Stop() {
 
 func (q *Querier) queryLabels(ctx context.Context) {
 	queryStart := time.Now()
-	resp, err := q.client.Labels(ctx, connect.NewRequest(queryv1alpha1.LabelsRequest{}))
+	resp, err := q.client.Labels(ctx, connect.NewRequest(&queryv1alpha1.LabelsRequest{}))
 	latency := time.Since(queryStart)
 	if err != nil {
 		q.metrics.labelsHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
