@@ -6,7 +6,7 @@ require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.11.0-20230823175648-8e6b94c22fce.1
 	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.31.0-20230823175648-8e6b94c22fce.1
 	connectrpc.com/connect v1.11.1
-	github.com/hashicorp/vault/api v1.9.2
+	github.com/hashicorp/vault/api v1.10.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.4.1
 	github.com/oklog/run v1.1.0
 	github.com/prometheus/client_golang v1.16.0
