@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.11.0-20230823175648-8e6b94c22fce.1
-	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.31.0-20230823175648-8e6b94c22fce.1
+	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.31.0-20230927085635-98775d63f89f.1
 	connectrpc.com/connect v1.11.1
 	github.com/hashicorp/vault/api v1.10.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.5.0
