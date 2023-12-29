@@ -12,7 +12,7 @@ require (
 	github.com/prometheus/client_golang v1.17.0
 	github.com/prometheus/prometheus v0.48.1
 	golang.org/x/exp v0.0.0-20231219180239-dc181d75b848
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.32.0
 )
 
 require (
