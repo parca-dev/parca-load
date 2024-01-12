@@ -60,7 +60,7 @@ type Querier struct {
 	reportTypes []queryv1alpha1.QueryRequest_ReportType
 }
 
-func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServiceClient) *Querier {
+func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServiceClient, queryTimeRangesConf []time.Duration) *Querier {
 	return &Querier{
 		done: make(chan struct{}),
 		metrics: querierMetrics{
@@ -121,7 +121,7 @@ func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServi
 		client:          client,
 		rng:             rand.New(rand.NewSource(time.Now().UnixNano())),
 		series:          make(map[string]timestampRange),
-		queryTimeRanges: []time.Duration{15 * time.Minute, 12 * time.Hour, 7 * 24 * time.Hour},
+		queryTimeRanges: queryTimeRangesConf,
 		reportTypes: []queryv1alpha1.QueryRequest_ReportType{
 			queryv1alpha1.QueryRequest_REPORT_TYPE_PPROF,
 			queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_ARROW,
