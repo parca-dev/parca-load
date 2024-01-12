@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +33,7 @@ func main() {
 	clientTimeout := flag.Duration("client-timeout", 10*time.Second, "Timeout for requests to the Parca instance")
 
 	queryInterval := flag.Duration("query-interval", 5*time.Second, "The time interval between queries to the Parca instance")
+	queryRangeStr := flag.String("query-range", "15m,12h,168h", "Comma-separated time durations for query")
 
 	flag.Parse()
 
@@ -76,6 +78,11 @@ func main() {
 		*token = tokenContent
 	}
 
+	queryRanges, err := parseTimeRanges(*queryRangeStr)
+	if err != nil {
+		log.Fatalf("parse time range string error: %v", err)
+	}
+
 	clientOptions := []connect.ClientOption{
 		connect.WithGRPCWeb(),
 	}
@@ -93,7 +100,7 @@ func main() {
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
-	querier := NewQuerier(reg, client)
+	querier := NewQuerier(reg, client, queryRanges)
 
 	var gr run.Group
 	gr.Add(run.SignalHandler(ctx, os.Interrupt, syscall.SIGTERM))
@@ -162,4 +169,19 @@ func (i *bearerTokenInterceptor) WrapStreamingClient(client connect.StreamingCli
 
 func (i *bearerTokenInterceptor) WrapStreamingHandler(handler connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
 	return handler
+}
+
+func parseTimeRanges(input string) ([]time.Duration, error) {
+	parts := strings.Split(input, ",")
+	durations := make([]time.Duration, len(parts))
+	var err error
+
+	for i, part := range parts {
+		durations[i], err = time.ParseDuration(strings.TrimSpace(part))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return durations, nil
 }
