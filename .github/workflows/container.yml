@@ -87,7 +87,7 @@ jobs:
     timeout-minutes: 30
     container:
       # https://github.com/containers/podman/tree/main/contrib/podmanimage
-      image: quay.io/containers/podman:v4.8.3@sha256:484871a43ea5fadff7f8375f5455d0eb1afad6c223c8ccbdd891cbc6fa12bba4
+      image: quay.io/containers/podman:v4.8.3@sha256:4739e2902a8abdfbdab972efee17890df2682754e09f86c64799ffe81af41a80
       options: >-
         --device /dev/fuse:rw
         --privileged
