@@ -3,8 +3,8 @@ module github.com/parca-dev/parca-load
 go 1.19
 
 require (
-	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.11.0-20230823175648-8e6b94c22fce.1
-	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.31.0-20230823175648-8e6b94c22fce.1
+	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.14.0-20240115164059-b8281ff5879f.1
+	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.32.0-20240115164059-b8281ff5879f.1
 	connectrpc.com/connect v1.14.0
 	github.com/hashicorp/vault/api v1.10.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.5.0
