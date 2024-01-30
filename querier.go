@@ -137,19 +137,28 @@ func (q *Querier) Run(ctx context.Context, interval time.Duration) {
 	defer close(q.done)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
+	run := func() {
+		// Since a lot of these queries are dependent on other queries, run
+		// them one at a time.
+		q.queryLabels(ctx)
+		q.queryValues(ctx)
+		q.queryProfileTypes(ctx)
+		q.queryRange(ctx)
+		q.querySingle(ctx)
+		q.queryMerge(ctx)
+	}
+
+	// Immediately run and then wait for the ticker.
+	// If we don't run immediately, we'll have to wait for the first tick to run which can be a long time e.g. 30min.
+	run()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Since a lot of these queries are dependent on other queries, run
-			// them one at a time.
-			q.queryLabels(ctx)
-			q.queryValues(ctx)
-			q.queryProfileTypes(ctx)
-			q.queryRange(ctx)
-			q.querySingle(ctx)
-			q.queryMerge(ctx)
+			run()
 		}
 	}
 }
