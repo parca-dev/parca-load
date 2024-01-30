@@ -335,11 +335,6 @@ func (q *Querier) queryMerge(ctx context.Context) {
 
 	profileType := q.profileTypes[q.rng.Intn(len(q.profileTypes))]
 	for _, tr := range q.queryTimeRanges {
-		if tr > 24*time.Hour {
-			// TODO(asubiotto): This currently OOMs frostdb. Gradually remove
-			// this skip.
-			continue
-		}
 		rangeEnd := time.Now()
 		rangeStart := rangeEnd.Add(-1 * tr)
 
