@@ -1,8 +1,8 @@
 buf.build/gen/go/grpc-ecosystem/grpc-gateway/protocolbuffers/go v1.32.0-20231027202514-3f42134f4c56.1/go.mod h1:XdxZqtnJr4q2vF8RLEhC903d6Nxxtz1vEMTyTAyvSUs=
 buf.build/gen/go/parca-dev/parca/connectrpc/go v1.15.0-20240212090955-3120409cafac.1 h1:rrj8UJnCS3sV9Mjp8upXTAixkDWc/465sLUT9oOvXZw=
 buf.build/gen/go/parca-dev/parca/connectrpc/go v1.15.0-20240212090955-3120409cafac.1/go.mod h1:jUQxqu9DBUtjljYaPyudIF8QBV7eH9GlZy5kbByi/7U=
-buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.32.0-20240212090955-3120409cafac.1 h1:PrTAFeNzWRr0eggrkKCmi3lFLzzJne6U4e0jpRxxiFk=
-buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.32.0-20240212090955-3120409cafac.1/go.mod h1:wcZCM39MWsh/s9Nv/p4hdTU6duELARux9HJqaqCHkbA=
+buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.32.0-20240214150141-4438b0578f1c.1 h1:JWwJCdBmeH7ts5DjqKyMtfbk/L12J9d6nWjo2U6OSgY=
+buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.32.0-20240214150141-4438b0578f1c.1/go.mod h1:wcZCM39MWsh/s9Nv/p4hdTU6duELARux9HJqaqCHkbA=
 connectrpc.com/connect v1.15.0 h1:lFdeCbZrVVDydAqwr4xGV2y+ULn+0Z73s5JBj2LikWo=
 connectrpc.com/connect v1.15.0/go.mod h1:bQmjpDY8xItMnttnurVgOkHUBMRT9cpsNi2O4AjKhmA=
 github.com/armon/go-radix v0.0.0-20180808171621-7fddfc383310/go.mod h1:ufUuZ+zHj4x4TnLV4JWEpy2hxWSpsRywHrMgIH9cCH8=
