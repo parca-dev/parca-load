@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/vault/api/auth/kubernetes v0.6.0
 	github.com/oklog/run v1.1.0
 	github.com/prometheus/client_golang v1.18.0
-	github.com/prometheus/prometheus v0.50.0
+	github.com/prometheus/prometheus v0.50.1
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 	google.golang.org/protobuf v1.32.0
 )
