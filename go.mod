@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.15.0-20240222154137-7ec32567cf78.1
-	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.32.0-20240222154137-7ec32567cf78.1
+	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.33.0-20240222154137-7ec32567cf78.1
 	connectrpc.com/connect v1.15.0
 	github.com/hashicorp/vault/api v1.12.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.6.0
@@ -12,7 +12,7 @@ require (
 	github.com/prometheus/client_golang v1.18.0
 	github.com/prometheus/prometheus v0.50.1
 	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
