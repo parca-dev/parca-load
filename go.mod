@@ -6,7 +6,7 @@ require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.0-20240222154137-7ec32567cf78.1
 	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.33.0-20240222154137-7ec32567cf78.1
 	connectrpc.com/connect v1.16.0
-	github.com/hashicorp/vault/api v1.12.1
+	github.com/hashicorp/vault/api v1.12.2
 	github.com/hashicorp/vault/api/auth/kubernetes v0.6.0
 	github.com/oklog/run v1.1.0
 	github.com/prometheus/client_golang v1.18.0
@@ -19,7 +19,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v3 v3.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/go-jose/go-jose/v3 v3.0.1 // indirect
+	github.com/go-jose/go-jose/v3 v3.0.3 // indirect
 	github.com/grafana/regexp v0.0.0-20221122212121-6b5c0a4cb7fd // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
