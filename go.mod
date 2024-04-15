@@ -13,7 +13,7 @@ require (
 	github.com/oklog/run v1.1.0
 	github.com/prometheus/client_golang v1.19.0
 	github.com/prometheus/prometheus v0.51.1
-	golang.org/x/exp v0.0.0-20240404231335-c0f41cb1a7a0
+	golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8
 	google.golang.org/protobuf v1.33.0
 )
 
