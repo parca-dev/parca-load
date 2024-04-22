@@ -6,7 +6,7 @@ toolchain go1.22.2
 
 require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.1-20240330192721-f15391241042.1
-	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.33.0-20240330192721-f15391241042.1
+	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.33.0-20240414232344-9ca06271cb73.1
 	connectrpc.com/connect v1.16.1
 	github.com/hashicorp/vault/api v1.12.2
 	github.com/hashicorp/vault/api/auth/kubernetes v0.6.0
