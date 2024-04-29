@@ -8,7 +8,7 @@ require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.1-20240414232344-9ca06271cb73.1
 	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.33.0-20240414232344-9ca06271cb73.1
 	connectrpc.com/connect v1.16.1
-	github.com/cenkalti/backoff/v4 v4.2.1
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/vault/api v1.13.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.6.0
 	github.com/oklog/run v1.1.0
