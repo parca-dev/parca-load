@@ -1,5 +1,5 @@
-buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.1-20240503042602-70ea80004af0.1 h1:vXtZs242FvmOiBM62pRBHyD6OigvO/q8hzc8a5mAnxc=
-buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.1-20240503042602-70ea80004af0.1/go.mod h1:jpd14BJE/sm+J6IjOXFCMnQpxKjRhIbKUTGjl2ZJms8=
+buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.1-20240506091937-f7edc7234847.1 h1:NnscgETt6nm4p1McHdLNl40bgp8XWYtbvVxz4ZOSRac=
+buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.1-20240506091937-f7edc7234847.1/go.mod h1:RL71fDWCmQJwIDPJRpC+UBOcR6JFNK+bOduD1hQ6a0E=
 buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.34.1-20240503042602-70ea80004af0.1 h1:II/1UPwdnImdOlHRis/Uk4/ebsUZSbc4QwqZsqinFew=
 buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.34.1-20240503042602-70ea80004af0.1/go.mod h1:lbDqoSeErWK6pETEKo/LO+JmU2GbZqVE8ILESypLuZU=
 connectrpc.com/connect v1.16.1 h1:rOdrK/RTI/7TVnn3JsVxt3n028MlTRwmK5Q4heSpjis=
