@@ -5,9 +5,9 @@ go 1.21
 toolchain go1.22.3
 
 require (
-	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.1-20240506091937-f7edc7234847.1
+	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.2-20240506091937-f7edc7234847.1
 	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.34.1-20240506091937-f7edc7234847.1
-	connectrpc.com/connect v1.16.1
+	connectrpc.com/connect v1.16.2
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/vault/api v1.13.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.6.0
@@ -40,7 +40,7 @@ require (
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
