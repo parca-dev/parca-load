@@ -85,8 +85,8 @@ github.com/prometheus/common v0.53.0 h1:U2pL9w9nmJwJDa4qqLQ3ZaePJ6ZTwt7cMD3AG3+a
 github.com/prometheus/common v0.53.0/go.mod h1:BrxBKv3FWBIGXw89Mg1AeBq7FSyRzXWI3l3e7W3RN5U=
 github.com/prometheus/procfs v0.12.0 h1:jluTpSng7V9hY0O2R9DzzJHYb2xULk9VTR1V1R/k6Bo=
 github.com/prometheus/procfs v0.12.0/go.mod h1:pcuDEFsWDnvcgNzo4EEweacyhjeA9Zk3cnaOZAZEfOo=
-github.com/prometheus/prometheus v0.52.0 h1:f7kHJgr7+zShpWdTCeKqbCWR7nKTScgLYQwRux9h1V0=
-github.com/prometheus/prometheus v0.52.0/go.mod h1:3z74cVsmVH0iXOR5QBjB7Pa6A0KJeEAK5A6UsmAFb1g=
+github.com/prometheus/prometheus v0.52.1 h1:BrQ29YG+mzdGh8DgHPirHbeMGNqtL+INe0rqg7ttBJ4=
+github.com/prometheus/prometheus v0.52.1/go.mod h1:3z74cVsmVH0iXOR5QBjB7Pa6A0KJeEAK5A6UsmAFb1g=
 github.com/ryanuber/columnize v2.1.0+incompatible/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
 github.com/ryanuber/go-glob v1.0.0 h1:iQh3xXAumdQ+4Ufa5b25cRpC5TYKlno6hsv6Cb3pkBk=
 github.com/ryanuber/go-glob v1.0.0/go.mod h1:807d1WSdnB0XRJzKNil9Om6lcp/3a0v4qIHxIXzX/Yc=
