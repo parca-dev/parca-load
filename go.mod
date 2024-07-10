@@ -6,7 +6,7 @@ toolchain go1.22.5
 
 require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.16.2-20240702203033-17104f4dda64.1
-	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.34.2-20240702092441-5add9073ebd2.2
+	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.34.2-20240702203033-17104f4dda64.2
 	connectrpc.com/connect v1.16.2
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/vault/api v1.14.0
