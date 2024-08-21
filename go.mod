@@ -12,7 +12,7 @@ require (
 	github.com/hashicorp/vault/api v1.14.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.7.0
 	github.com/oklog/run v1.1.0
-	github.com/prometheus/client_golang v1.19.1
+	github.com/prometheus/client_golang v1.20.0
 	github.com/prometheus/prometheus v0.54.0
 	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
 	google.golang.org/protobuf v1.34.2
@@ -33,6 +33,7 @@ require (
 	github.com/hashicorp/go-secure-stdlib/strutil v0.1.2 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
+	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
