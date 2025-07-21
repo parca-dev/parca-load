@@ -11,7 +11,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/vault/api v1.15.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.8.0
-	github.com/oklog/run v1.1.0
+	github.com/oklog/run v1.2.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/prometheus v0.301.0
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
