@@ -6,7 +6,7 @@ toolchain go1.25.1
 
 require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.19.0-20250716091922-79400b5144e4.1
-	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.36.9-20250716091922-79400b5144e4.1
+	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.36.10-20250716091922-79400b5144e4.1
 	connectrpc.com/connect v1.19.0
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/vault/api v1.21.0
@@ -15,7 +15,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/prometheus v0.301.0
 	golang.org/x/exp v0.0.0-20250911091902-df9299821621
-	google.golang.org/protobuf v1.36.9
+	google.golang.org/protobuf v1.36.10
 )
 
 require (
