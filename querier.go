@@ -142,9 +142,9 @@ func (q *Querier) Run(ctx context.Context, interval time.Duration) {
 	run := func() {
 		// Since a lot of these queries are dependent on other queries, run
 		// them one at a time.
+		q.queryProfileTypes(ctx, interval)
 		q.queryLabels(ctx, interval)
 		q.queryValues(ctx, interval)
-		q.queryProfileTypes(ctx, interval)
 		q.queryRange(ctx)
 		q.querySingle(ctx)
 		q.queryMerge(ctx)
@@ -170,6 +170,13 @@ func (q *Querier) Stop() {
 }
 
 func (q *Querier) queryLabels(ctx context.Context, interval time.Duration) {
+	// Pick a random profile type if available
+	var profileType *string
+	if len(q.profileTypes) > 0 {
+		pt := q.profileTypes[q.rng.Intn(len(q.profileTypes))]
+		profileType = &pt
+	}
+
 	for _, tr := range q.queryTimeRanges {
 		rangeEnd := time.Now()
 		rangeStart := rangeEnd.Add(-1 * tr)
@@ -180,19 +187,31 @@ func (q *Querier) queryLabels(ctx context.Context, interval time.Duration) {
 			defer func() { count++ }()
 
 			queryStart := time.Now()
-			resp, err = q.client.Labels(ctx, connect.NewRequest(&queryv1alpha1.LabelsRequest{
+			req := &queryv1alpha1.LabelsRequest{
 				Start: timestamppb.New(rangeStart),
 				End:   timestamppb.New(rangeEnd),
-			}))
+			}
+			if profileType != nil {
+				req.ProfileType = profileType
+			}
+			resp, err = q.client.Labels(ctx, connect.NewRequest(req))
 			latency := time.Since(queryStart)
 			if err != nil {
 				q.metrics.labelsHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
-				log.Printf("labels(over=%s): failed to make request %d: %v\n", tr, count, err)
+				if profileType != nil {
+					log.Printf("labels(type=%s,over=%s): failed to make request %d: %v\n", *profileType, tr, count, err)
+				} else {
+					log.Printf("labels(over=%s): failed to make request %d: %v\n", tr, count, err)
+				}
 				return
 			}
 			q.metrics.labelsHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
 			q.labels = append(q.labels[:0], resp.Msg.LabelNames...)
-			log.Printf("labels(over=%s): took %v and got %d results\n", tr, latency, len(resp.Msg.LabelNames))
+			if profileType != nil {
+				log.Printf("labels(type=%s,over=%s): took %v and got %d results\n", *profileType, tr, latency, len(resp.Msg.LabelNames))
+			} else {
+				log.Printf("labels(over=%s): took %v and got %d results\n", tr, latency, len(resp.Msg.LabelNames))
+			}
 
 			return nil
 		}
@@ -212,6 +231,13 @@ func (q *Querier) queryValues(ctx context.Context, interval time.Duration) {
 	}
 	label := q.labels[q.rng.Intn(len(q.labels))]
 
+	// Pick a random profile type if available
+	var profileType *string
+	if len(q.profileTypes) > 0 {
+		pt := q.profileTypes[q.rng.Intn(len(q.profileTypes))]
+		profileType = &pt
+	}
+
 	for _, tr := range q.queryTimeRanges {
 		rangeEnd := time.Now()
 		rangeStart := rangeEnd.Add(-1 * tr)
@@ -221,20 +247,32 @@ func (q *Querier) queryValues(ctx context.Context, interval time.Duration) {
 		operation := func() (err error) {
 			defer func() { count++ }()
 			queryStart := time.Now()
-			resp, err = q.client.Values(ctx, connect.NewRequest(&queryv1alpha1.ValuesRequest{
+			req := &queryv1alpha1.ValuesRequest{
 				LabelName: label,
 				Match:     nil,
 				Start:     timestamppb.New(rangeStart),
 				End:       timestamppb.New(rangeEnd),
-			}))
+			}
+			if profileType != nil {
+				req.ProfileType = profileType
+			}
+			resp, err = q.client.Values(ctx, connect.NewRequest(req))
 			latency := time.Since(queryStart)
 			if err != nil {
 				q.metrics.valuesHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
-				log.Printf("values(label=%s,over=%s): failed to make request %d: %v\n", label, tr, count, err)
+				if profileType != nil {
+					log.Printf("values(label=%s,type=%s,over=%s): failed to make request %d: %v\n", label, *profileType, tr, count, err)
+				} else {
+					log.Printf("values(label=%s,over=%s): failed to make request %d: %v\n", label, tr, count, err)
+				}
 				return
 			}
 			q.metrics.valuesHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
-			log.Printf("values(label=%s,over=%s): took %v and got %d results\n", label, tr, latency, len(resp.Msg.LabelValues))
+			if profileType != nil {
+				log.Printf("values(label=%s,type=%s,over=%s): took %v and got %d results\n", label, *profileType, tr, latency, len(resp.Msg.LabelValues))
+			} else {
+				log.Printf("values(label=%s,over=%s): took %v and got %d results\n", label, tr, latency, len(resp.Msg.LabelValues))
+			}
 
 			return nil
 		}
