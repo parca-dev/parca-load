@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/pprof"
@@ -31,6 +32,7 @@ func main() {
 	vaultTokenPath := flag.String("vault-token-path", "parca-load/token", "The path in Vault to find the parca-load token")
 	vaultRole := flag.String("vault-role", "parca-load", "The role name of parca-load in Vault")
 	clientTimeout := flag.Duration("client-timeout", 10*time.Second, "Timeout for requests to the Parca instance")
+	customHeadersStr := flag.String("headers", "", "Comma-separated custom headers in the format 'key=value,key2=value2' to attach to requests")
 
 	queryInterval := flag.Duration("query-interval", 5*time.Second, "The time interval between queries to the Parca instance")
 	queryRangeStr := flag.String("query-range", "15m,12h,168h", "Comma-separated time durations for query")
@@ -83,11 +85,19 @@ func main() {
 		log.Fatalf("parse time range string error: %v", err)
 	}
 
+	customHeaders, err := parseHeaders(*customHeadersStr)
+	if err != nil {
+		log.Fatalf("parse custom headers error: %v", err)
+	}
+
 	clientOptions := []connect.ClientOption{
 		connect.WithGRPCWeb(),
 	}
 	if *token != "" {
 		clientOptions = append(clientOptions, connect.WithInterceptors(&bearerTokenInterceptor{token: *token}))
+	}
+	if len(customHeaders) > 0 {
+		clientOptions = append(clientOptions, connect.WithInterceptors(&customHeadersInterceptor{headers: customHeaders}))
 	}
 
 	client := queryv1alpha1connect.NewQueryServiceClient(
@@ -171,6 +181,27 @@ func (i *bearerTokenInterceptor) WrapStreamingHandler(handler connect.StreamingH
 	return handler
 }
 
+type customHeadersInterceptor struct {
+	headers map[string]string
+}
+
+func (i *customHeadersInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
+	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		for key, value := range i.headers {
+			req.Header().Set(key, value)
+		}
+		return next(ctx, req)
+	}
+}
+
+func (i *customHeadersInterceptor) WrapStreamingClient(client connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return client
+}
+
+func (i *customHeadersInterceptor) WrapStreamingHandler(handler connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return handler
+}
+
 func parseTimeRanges(input string) ([]time.Duration, error) {
 	parts := strings.Split(input, ",")
 	durations := make([]time.Duration, len(parts))
@@ -184,4 +215,28 @@ func parseTimeRanges(input string) ([]time.Duration, error) {
 	}
 
 	return durations, nil
+}
+
+func parseHeaders(input string) (map[string]string, error) {
+	if input == "" {
+		return nil, nil
+	}
+
+	headers := make(map[string]string)
+	pairs := strings.Split(input, ",")
+
+	for _, pair := range pairs {
+		parts := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid header format: %s (expected key=value)", pair)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			return nil, fmt.Errorf("empty header key in: %s", pair)
+		}
+		headers[key] = value
+	}
+
+	return headers, nil
 }
