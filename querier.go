@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"sort"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -16,8 +15,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/prometheus/model/labels"
-	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -32,13 +29,7 @@ type querierMetrics struct {
 	valuesHistogram       *prometheus.HistogramVec
 	profileTypesHistogram *prometheus.HistogramVec
 	rangeHistogram        *prometheus.HistogramVec
-	singleHistogram       *prometheus.HistogramVec
 	mergeHistogram        *prometheus.HistogramVec
-}
-
-type timestampRange struct {
-	first time.Time
-	last  time.Time
 }
 
 type Querier struct {
@@ -53,12 +44,9 @@ type Querier struct {
 
 	labels       []string
 	profileTypes []string
-	series       map[string]timestampRange
 
 	// queryTimeRanges are used by range and merge queries.
 	queryTimeRanges []time.Duration
-	// reportTypes are used by single and merge queries.
-	reportTypes []queryv1alpha1.QueryRequest_ReportType
 }
 
 func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServiceClient, queryTimeRangesConf []time.Duration) *Querier {
@@ -97,15 +85,6 @@ func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServi
 				},
 				[]string{"grpc_code", "range", "labels"},
 			),
-			singleHistogram: promauto.With(reg).NewHistogramVec(
-				prometheus.HistogramOpts{
-					Name:                        "parca_client_query_seconds",
-					Help:                        "The seconds it takes to make Query requests against a Parca",
-					ConstLabels:                 map[string]string{"mode": "single"},
-					NativeHistogramBucketFactor: 1.1,
-				},
-				[]string{"grpc_code", "report_type", "range"},
-			),
 			mergeHistogram: promauto.With(reg).NewHistogramVec(
 				prometheus.HistogramOpts{
 					Name:                        "parca_client_query_seconds",
@@ -113,18 +92,12 @@ func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServi
 					ConstLabels:                 map[string]string{"mode": "merge"},
 					NativeHistogramBucketFactor: 1.1,
 				},
-				[]string{"grpc_code", "report_type", "range", "labels"},
+				[]string{"grpc_code", "range", "labels"},
 			),
 		},
 		client:          client,
 		rng:             rand.New(rand.NewSource(time.Now().UnixNano())),
-		series:          make(map[string]timestampRange),
 		queryTimeRanges: queryTimeRangesConf,
-		reportTypes: []queryv1alpha1.QueryRequest_ReportType{
-			queryv1alpha1.QueryRequest_REPORT_TYPE_PPROF,
-			queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_ARROW,
-			queryv1alpha1.QueryRequest_REPORT_TYPE_TABLE_ARROW,
-		},
 	}
 }
 
@@ -143,7 +116,6 @@ func (q *Querier) Run(ctx context.Context, interval time.Duration) {
 		q.queryLabels(ctx, interval)
 		q.queryValues(ctx, interval)
 		q.queryRange(ctx)
-		q.querySingle(ctx)
 		q.queryMerge(ctx)
 	}
 
@@ -363,65 +335,6 @@ func (q *Querier) queryRange(ctx context.Context) {
 			"range(type=%s,over=%s): took %s and got %d series\n",
 			profileType, tr, latency, len(resp.Msg.Series),
 		)
-
-		for k := range q.series {
-			delete(q.series, k)
-		}
-		for _, series := range resp.Msg.Series {
-			if len(series.Samples) < 2 {
-				continue
-			}
-			lSet := labels.Labels{}
-			for _, l := range series.Labelset.Labels {
-				lSet = append(lSet, labels.Label{Name: l.Name, Value: l.Value})
-			}
-			sort.Sort(lSet)
-			q.series[profileType+lSet.String()] = timestampRange{
-				first: series.Samples[0].Timestamp.AsTime(),
-				last:  series.Samples[len(series.Samples)-1].Timestamp.AsTime(),
-			}
-		}
-	}
-}
-
-func (q *Querier) querySingle(ctx context.Context) {
-	if len(q.series) == 0 {
-		log.Println("single: no series to query")
-		return
-	}
-	seriesKeys := maps.Keys(q.series)
-	series := seriesKeys[q.rng.Intn(len(seriesKeys))]
-	sampleTs := q.series[series].first
-
-	for _, reportType := range q.reportTypes {
-		queryStart := time.Now()
-		_, err := q.client.Query(ctx, connect.NewRequest(&queryv1alpha1.QueryRequest{
-			Mode: queryv1alpha1.QueryRequest_MODE_SINGLE_UNSPECIFIED,
-			Options: &queryv1alpha1.QueryRequest_Single{
-				Single: &queryv1alpha1.SingleProfile{
-					Query: series,
-					Time:  timestamppb.New(sampleTs),
-				},
-			},
-			ReportType: reportType,
-		}))
-		latency := time.Since(queryStart)
-		if err != nil {
-			q.metrics.singleHistogram.WithLabelValues(
-				connect.CodeOf(err).String(),
-				reportType.String(),
-				"",
-			).Observe(latency.Seconds())
-			log.Printf("single(series=%s, reportType=%s): failed to make request: %v\n", series, reportType, err)
-			continue
-		}
-
-		q.metrics.singleHistogram.WithLabelValues(
-			grpcCodeOK,
-			reportType.String(),
-			"",
-		).Observe(latency.Seconds())
-		log.Printf("single(series=%s, reportType=%s): took %v\n", series, reportType, latency)
 	}
 }
 
@@ -436,47 +349,43 @@ func (q *Querier) queryMerge(ctx context.Context) {
 		rangeEnd := time.Now()
 		rangeStart := rangeEnd.Add(-1 * tr)
 
-		for _, reportType := range q.reportTypes {
-			queryStart := time.Now()
-			_, err := q.client.Query(ctx, connect.NewRequest(&queryv1alpha1.QueryRequest{
-				Mode: queryv1alpha1.QueryRequest_MODE_MERGE,
-				Options: &queryv1alpha1.QueryRequest_Merge{
-					Merge: &queryv1alpha1.MergeProfile{
-						Query: profileType,
-						Start: timestamppb.New(rangeStart),
-						End:   timestamppb.New(rangeEnd),
-					},
+		queryStart := time.Now()
+		_, err := q.client.Query(ctx, connect.NewRequest(&queryv1alpha1.QueryRequest{
+			Mode: queryv1alpha1.QueryRequest_MODE_MERGE,
+			Options: &queryv1alpha1.QueryRequest_Merge{
+				Merge: &queryv1alpha1.MergeProfile{
+					Query: profileType,
+					Start: timestamppb.New(rangeStart),
+					End:   timestamppb.New(rangeEnd),
 				},
-				ReportType:        reportType,
-				NodeTrimThreshold: &nodeTrimThreshold,
-			}))
-			latency := time.Since(queryStart)
-			if err != nil {
-				q.metrics.mergeHistogram.WithLabelValues(
-					connect.CodeOf(err).String(),
-					reportType.String(),
-					tr.String(),
-					"all",
-				).Observe(latency.Seconds())
-
-				log.Printf(
-					"merge(type=%s,reportType=%s,over=%s): failed to make request: %v\n",
-					profileType, reportType, tr, err,
-				)
-				continue
-			}
-
+			},
+			ReportType:        queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_ARROW,
+			NodeTrimThreshold: &nodeTrimThreshold,
+		}))
+		latency := time.Since(queryStart)
+		if err != nil {
 			q.metrics.mergeHistogram.WithLabelValues(
-				grpcCodeOK,
-				reportType.String(),
+				connect.CodeOf(err).String(),
 				tr.String(),
 				"all",
 			).Observe(latency.Seconds())
 
 			log.Printf(
-				"merge(type=%s,reportType=%s,over=%s): took %s\n",
-				profileType, reportType, tr, latency,
+				"merge(type=%s,over=%s): failed to make request: %v\n",
+				profileType, tr, err,
 			)
+			continue
 		}
+
+		q.metrics.mergeHistogram.WithLabelValues(
+			grpcCodeOK,
+			tr.String(),
+			"all",
+		).Observe(latency.Seconds())
+
+		log.Printf(
+			"merge(type=%s,over=%s): took %s\n",
+			profileType, tr, latency,
+		)
 	}
 }
