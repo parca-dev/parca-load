@@ -36,3 +36,30 @@ For these queries it picks a random timestamp of the available time range and qu
 Every 15 seconds (configurable) there are `Query` requests that actually request merged profiles for either 15min, or 7 days, if enough data is available for each in a series.
 
 Metrics are collected and available on http://localhost:7171/metrics
+
+### Configuration
+
+#### Query Range
+
+The `-query-range` flag specifies time durations for queries, separated by semicolons. Default: `15m;12h;168h`.
+
+```
+./parca-load -url=http://localhost:7070 -query-range="1h;24h"
+```
+
+#### Label Selectors
+
+The `-labels` flag allows filtering queries by label selectors. Use Prometheus-style label selectors with braces. Multiple selectors are separated by semicolons. Default: `all` (no filtering).
+
+```
+# Single selector
+./parca-load -url=http://localhost:7070 -labels='{job="api"}'
+
+# Multiple labels in one selector
+./parca-load -url=http://localhost:7070 -labels='{job="api",env="prod"}'
+
+# Multiple selectors (each is queried separately)
+./parca-load -url=http://localhost:7070 -labels='{job="api"};{namespace="production"}'
+```
+
+When label selectors are specified, they are appended to the profile type in QueryRange and Query (merge) requests. For example, with `-labels='{job="api"}'`, a query becomes `memory:alloc_objects:count:space:bytes{job="api"}`

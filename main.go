@@ -35,7 +35,8 @@ func main() {
 	customHeadersStr := flag.String("headers", "", "Comma-separated custom headers in the format 'key=value,key2=value2' to attach to requests")
 
 	queryInterval := flag.Duration("query-interval", 5*time.Second, "The time interval between queries to the Parca instance")
-	queryRangeStr := flag.String("query-range", "15m,12h,168h", "Comma-separated time durations for query")
+	queryRangeStr := flag.String("query-range", "15m;12h;168h", "Semicolon-separated time durations for query ranges")
+	labelsStr := flag.String("labels", "all", "Semicolon-separated label selectors for queries (e.g., '{job=\"api\"};{level=\"info\"}'), or 'all' for no filtering")
 
 	flag.Parse()
 
@@ -85,6 +86,8 @@ func main() {
 		log.Fatalf("parse time range string error: %v", err)
 	}
 
+	labelSelectors := parseLabels(*labelsStr)
+
 	customHeaders, err := parseHeaders(*customHeadersStr)
 	if err != nil {
 		log.Fatalf("parse custom headers error: %v", err)
@@ -110,7 +113,7 @@ func main() {
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
-	querier := NewQuerier(reg, client, queryRanges)
+	querier := NewQuerier(reg, client, queryRanges, labelSelectors)
 
 	var gr run.Group
 	gr.Add(run.SignalHandler(ctx, os.Interrupt, syscall.SIGTERM))
@@ -203,7 +206,7 @@ func (i *customHeadersInterceptor) WrapStreamingHandler(handler connect.Streamin
 }
 
 func parseTimeRanges(input string) ([]time.Duration, error) {
-	parts := strings.Split(input, ",")
+	parts := strings.Split(input, ";")
 	durations := make([]time.Duration, len(parts))
 	var err error
 
@@ -215,6 +218,24 @@ func parseTimeRanges(input string) ([]time.Duration, error) {
 	}
 
 	return durations, nil
+}
+
+func parseLabels(input string) []string {
+	if input == "" || input == "all" {
+		return []string{"all"}
+	}
+	parts := strings.Split(input, ";")
+	selectors := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			selectors = append(selectors, p)
+		}
+	}
+	if len(selectors) == 0 {
+		return []string{"all"}
+	}
+	return selectors
 }
 
 func parseHeaders(input string) (map[string]string, error) {

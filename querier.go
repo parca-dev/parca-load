@@ -47,9 +47,11 @@ type Querier struct {
 
 	// queryTimeRanges are used by range and merge queries.
 	queryTimeRanges []time.Duration
+	// labelSelectors are appended to profile types for filtering queries.
+	labelSelectors []string
 }
 
-func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServiceClient, queryTimeRangesConf []time.Duration) *Querier {
+func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServiceClient, queryTimeRangesConf []time.Duration, labelSelectors []string) *Querier {
 	return &Querier{
 		done: make(chan struct{}),
 		metrics: querierMetrics{
@@ -98,6 +100,7 @@ func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServi
 		client:          client,
 		rng:             rand.New(rand.NewSource(time.Now().UnixNano())),
 		queryTimeRanges: queryTimeRangesConf,
+		labelSelectors:  labelSelectors,
 	}
 }
 
@@ -311,30 +314,37 @@ func (q *Querier) queryRange(ctx context.Context) {
 	profileType := q.profileTypes[q.rng.Intn(len(q.profileTypes))]
 
 	for _, tr := range q.queryTimeRanges {
-		rangeEnd := time.Now()
-		rangeStart := rangeEnd.Add(-1 * tr)
+		for _, labelSelector := range q.labelSelectors {
+			rangeEnd := time.Now()
+			rangeStart := rangeEnd.Add(-1 * tr)
 
-		queryStart := time.Now()
-		resp, err := q.client.QueryRange(ctx, connect.NewRequest(&queryv1alpha1.QueryRangeRequest{
-			Query: profileType,
-			Start: timestamppb.New(rangeStart),
-			End:   timestamppb.New(rangeEnd),
-			Step:  durationpb.New(time.Duration(tr.Nanoseconds() / numHorizontalPixelsOn8KDisplay)),
-		}))
-		latency := time.Since(queryStart)
-		if err != nil {
-			q.metrics.rangeHistogram.WithLabelValues(
-				connect.CodeOf(err).String(), tr.String(), "all",
-			).Observe(latency.Seconds())
-			log.Printf("range(type=%s,over=%s): failed to make request: %v\n", profileType, tr, err)
-			continue
+			query := profileType
+			if labelSelector != "all" {
+				query = profileType + labelSelector
+			}
+
+			queryStart := time.Now()
+			resp, err := q.client.QueryRange(ctx, connect.NewRequest(&queryv1alpha1.QueryRangeRequest{
+				Query: query,
+				Start: timestamppb.New(rangeStart),
+				End:   timestamppb.New(rangeEnd),
+				Step:  durationpb.New(time.Duration(tr.Nanoseconds() / numHorizontalPixelsOn8KDisplay)),
+			}))
+			latency := time.Since(queryStart)
+			if err != nil {
+				q.metrics.rangeHistogram.WithLabelValues(
+					connect.CodeOf(err).String(), tr.String(), labelSelector,
+				).Observe(latency.Seconds())
+				log.Printf("range(query=%s,over=%s,labels=%s): failed to make request: %v\n", query, tr, labelSelector, err)
+				continue
+			}
+
+			q.metrics.rangeHistogram.WithLabelValues(grpcCodeOK, tr.String(), labelSelector).Observe(latency.Seconds())
+			log.Printf(
+				"range(query=%s,over=%s,labels=%s): took %s and got %d series\n",
+				query, tr, labelSelector, latency, len(resp.Msg.Series),
+			)
 		}
-
-		q.metrics.rangeHistogram.WithLabelValues(grpcCodeOK, tr.String(), "all").Observe(latency.Seconds())
-		log.Printf(
-			"range(type=%s,over=%s): took %s and got %d series\n",
-			profileType, tr, latency, len(resp.Msg.Series),
-		)
 	}
 }
 
@@ -346,46 +356,53 @@ func (q *Querier) queryMerge(ctx context.Context) {
 
 	profileType := q.profileTypes[q.rng.Intn(len(q.profileTypes))]
 	for _, tr := range q.queryTimeRanges {
-		rangeEnd := time.Now()
-		rangeStart := rangeEnd.Add(-1 * tr)
+		for _, labelSelector := range q.labelSelectors {
+			rangeEnd := time.Now()
+			rangeStart := rangeEnd.Add(-1 * tr)
 
-		queryStart := time.Now()
-		_, err := q.client.Query(ctx, connect.NewRequest(&queryv1alpha1.QueryRequest{
-			Mode: queryv1alpha1.QueryRequest_MODE_MERGE,
-			Options: &queryv1alpha1.QueryRequest_Merge{
-				Merge: &queryv1alpha1.MergeProfile{
-					Query: profileType,
-					Start: timestamppb.New(rangeStart),
-					End:   timestamppb.New(rangeEnd),
+			query := profileType
+			if labelSelector != "all" {
+				query = profileType + labelSelector
+			}
+
+			queryStart := time.Now()
+			_, err := q.client.Query(ctx, connect.NewRequest(&queryv1alpha1.QueryRequest{
+				Mode: queryv1alpha1.QueryRequest_MODE_MERGE,
+				Options: &queryv1alpha1.QueryRequest_Merge{
+					Merge: &queryv1alpha1.MergeProfile{
+						Query: query,
+						Start: timestamppb.New(rangeStart),
+						End:   timestamppb.New(rangeEnd),
+					},
 				},
-			},
-			ReportType:        queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_ARROW,
-			NodeTrimThreshold: &nodeTrimThreshold,
-		}))
-		latency := time.Since(queryStart)
-		if err != nil {
+				ReportType:        queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_ARROW,
+				NodeTrimThreshold: &nodeTrimThreshold,
+			}))
+			latency := time.Since(queryStart)
+			if err != nil {
+				q.metrics.mergeHistogram.WithLabelValues(
+					connect.CodeOf(err).String(),
+					tr.String(),
+					labelSelector,
+				).Observe(latency.Seconds())
+
+				log.Printf(
+					"merge(query=%s,over=%s,labels=%s): failed to make request: %v\n",
+					query, tr, labelSelector, err,
+				)
+				continue
+			}
+
 			q.metrics.mergeHistogram.WithLabelValues(
-				connect.CodeOf(err).String(),
+				grpcCodeOK,
 				tr.String(),
-				"all",
+				labelSelector,
 			).Observe(latency.Seconds())
 
 			log.Printf(
-				"merge(type=%s,over=%s): failed to make request: %v\n",
-				profileType, tr, err,
+				"merge(query=%s,over=%s,labels=%s): took %s\n",
+				query, tr, labelSelector, latency,
 			)
-			continue
 		}
-
-		q.metrics.mergeHistogram.WithLabelValues(
-			grpcCodeOK,
-			tr.String(),
-			"all",
-		).Observe(latency.Seconds())
-
-		log.Printf(
-			"merge(type=%s,over=%s): took %s\n",
-			profileType, tr, latency,
-		)
 	}
 }
