@@ -15,8 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # renovate: datasource=go depName=github.com/goreleaser/goreleaser
-  GORELEASER_VERSION: v1.26.2
+  GORELEASER_VERSION: "~> v2"
   IMAGE_NAME: ghcr.io/parca-dev/parca-load
 
 jobs:
@@ -32,7 +31,7 @@ jobs:
       contents: read
     steps:
       - id: skip-check
-        uses: fkirc/skip-duplicate-actions@f75f66ce1886f00957d99748a42c724f4330bdcf # v5.3.1
+        uses: fkirc/skip-duplicate-actions@v5
         with:
           do_not_skip: '["schedule", "workflow_dispatch"]'
           paths: |-
@@ -53,26 +52,26 @@ jobs:
     if: ${{ needs.skip-check.outputs.should_skip != 'true' }}
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
+        uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
           check-latest: true
           cache: true
 
       - name: Build binaries
-        uses: goreleaser/goreleaser-action@b508e2e3ef3b19d4e4146d4f8fb3ba9db644a757 # v3.2.0
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: ${{ env.GORELEASER_VERSION }}
-          args: build --rm-dist --skip-validate --snapshot --debug
+          args: build --clean --skip=validate --snapshot --debug
 
       - name: Archive generated artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@v4
         with:
           name: parca-load-dist-container
           if-no-files-found: error
@@ -102,9 +101,9 @@ jobs:
         run: dnf install --assumeyes --repo fedora jq
 
       - name: Check out code into the Go module directory
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@v4
         with:
           name: parca-load-dist-container
           path: dist
@@ -127,11 +126,11 @@ jobs:
 
       - name: Install cosign
         if: ${{ github.event_name != 'pull_request' }}
-        uses: sigstore/cosign-installer@c85d0e205a72a294fe064f618a87dbac13084086 # v2.8.1
+        uses: sigstore/cosign-installer@v3
 
       - name: Install crane
         if: ${{ github.event_name != 'pull_request' }}
-        uses: imjasonh/setup-crane@00c9e93efa4e1138c9a7a5c594acd6c75a2fbf0c # v0.3
+        uses: imjasonh/setup-crane@v0.4
 
       - name: Login to registry
         if: ${{ github.event_name != 'pull_request' }}
