@@ -37,3 +37,38 @@ checksum:
   name_template: "checksums.txt"
 source:
   enabled: true
+
+# Build container images using Ko
+# https://goreleaser.com/customization/ko/
+kos:
+  - id: parca-load
+    build: parca-load
+    # Use distroless static base for minimal attack surface
+    base_image: gcr.io/distroless/static-debian12:nonroot
+    repository: ghcr.io/parca-dev/parca-load
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    tags:
+      - "{{ if .IsSnapshot }}{{ .Branch }}-{{ .ShortCommit }}{{ else }}{{ .Version }}{{ end }}"
+      - "{{ if not .IsSnapshot }}latest{{ end }}"
+    sbom: none
+    bare: true
+    preserve_import_paths: false
+    labels:
+      org.opencontainers.image.source: https://github.com/parca-dev/parca-load
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.licenses: Apache-2.0
+
+# Sign container manifests with Cosign
+docker_signs:
+  - artifacts: manifests
+    args:
+      - sign
+      - --yes
+      - -a
+      - "GIT_HASH={{ .ShortCommit }}"
+      - -a
+      - "GIT_VERSION={{ .Version }}"
+      - "${artifact}@${digest}"
