@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"buf.build/gen/go/parca-dev/parca/connectrpc/go/parca/query/v1alpha1/queryv1alpha1connect"
@@ -149,11 +150,42 @@ func (q *Querier) Run(ctx context.Context, interval time.Duration) {
 	defer ticker.Stop()
 
 	run := func() {
-		q.queryProfileTypes(ctx, interval)
-		q.queryLabels(ctx, interval)
-		q.queryValues(ctx, interval)
-		q.queryRange(ctx)
-		q.queryMerge(ctx)
+		g, ctx := errgroup.WithContext(ctx)
+
+		g.Go(
+			func() error {
+				q.queryProfileTypes(ctx, interval)
+				return nil
+			},
+		)
+		g.Go(
+			func() error {
+				q.queryLabels(ctx, interval)
+				return nil
+			},
+		)
+		g.Go(
+			func() error {
+				q.queryValues(ctx, interval)
+				return nil
+			},
+		)
+		g.Go(
+			func() error {
+				q.queryRange(ctx)
+				return nil
+			},
+		)
+		g.Go(
+			func() error {
+				q.queryMerge(ctx)
+				return nil
+			},
+		)
+
+		if err := g.Wait(); err != nil {
+			log.Printf("query error: %v\n", err)
+		}
 	}
 
 	// Immediately run and then wait for the ticker.
@@ -176,15 +208,23 @@ func (q *Querier) Stop() {
 }
 
 // fetchProfileTypes executes the ProfileTypes API call and returns the results.
-func (q *Querier) fetchProfileTypes(ctx context.Context, tr time.Duration) ([]*queryv1alpha1.ProfileType, time.Duration, error) {
+func (q *Querier) fetchProfileTypes(ctx context.Context, tr time.Duration) (
+	[]*queryv1alpha1.ProfileType,
+	time.Duration,
+	error,
+) {
 	rangeEnd := time.Now()
 	rangeStart := rangeEnd.Add(-1 * tr)
 
 	queryStart := time.Now()
-	resp, err := q.client.ProfileTypes(ctx, connect.NewRequest(&queryv1alpha1.ProfileTypesRequest{
-		Start: timestamppb.New(rangeStart),
-		End:   timestamppb.New(rangeEnd),
-	}))
+	resp, err := q.client.ProfileTypes(
+		ctx, connect.NewRequest(
+			&queryv1alpha1.ProfileTypesRequest{
+				Start: timestamppb.New(rangeStart),
+				End:   timestamppb.New(rangeEnd),
+			},
+		),
+	)
 	latency := time.Since(queryStart)
 	if err != nil {
 		q.metrics.profileTypesHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
@@ -220,7 +260,13 @@ func (q *Querier) queryLabels(ctx context.Context, interval time.Duration) {
 					return
 				}
 				q.metrics.labelsHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
-				log.Printf("labels(type=%s,over=%s): took %v and got %d results\n", pt, tr, latency, len(resp.Msg.LabelNames))
+				log.Printf(
+					"labels(type=%s,over=%s): took %v and got %d results\n",
+					pt,
+					tr,
+					latency,
+					len(resp.Msg.LabelNames),
+				)
 
 				return nil
 			}
@@ -262,12 +308,29 @@ func (q *Querier) queryValues(ctx context.Context, interval time.Duration) {
 					resp, err = q.client.Values(ctx, connect.NewRequest(req))
 					latency := time.Since(queryStart)
 					if err != nil {
-						q.metrics.valuesHistogram.WithLabelValues(connect.CodeOf(err).String(), lbl).Observe(latency.Seconds())
-						log.Printf("values(label=%s,type=%s,over=%s): failed to make request %d: %v\n", lbl, pt, tr, count, err)
+						q.metrics.valuesHistogram.WithLabelValues(
+							connect.CodeOf(err).String(),
+							lbl,
+						).Observe(latency.Seconds())
+						log.Printf(
+							"values(label=%s,type=%s,over=%s): failed to make request %d: %v\n",
+							lbl,
+							pt,
+							tr,
+							count,
+							err,
+						)
 						return
 					}
 					q.metrics.valuesHistogram.WithLabelValues(grpcCodeOK, lbl).Observe(latency.Seconds())
-					log.Printf("values(label=%s,type=%s,over=%s): took %v and got %d results\n", lbl, pt, tr, latency, len(resp.Msg.LabelValues))
+					log.Printf(
+						"values(label=%s,type=%s,over=%s): took %v and got %d results\n",
+						lbl,
+						pt,
+						tr,
+						latency,
+						len(resp.Msg.LabelValues),
+					)
 
 					return nil
 				}
