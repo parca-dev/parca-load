@@ -1,38 +1,66 @@
 # parca-load
 
-This is a tool that continuously queries Parca instances for their data.
+A load testing tool that continuously queries Parca instances.
 
-It is based on the Parca gRPC APIs defined on https://buf.build/parca-dev/parca and uses the generated connect-go code via `go.buf.build/bufbuild/connect-go/parca-dev/parca`.
-
-### Installation
+## Installation
 
 ```
 go install github.com/parca-dev/parca-load@latest
 ```
 
-or run the container images
+or via container:
 
 ```
-docker run -d ghcr.io/parca-dev/parca-load
+docker run ghcr.io/parca-dev/parca-load
 ```
 
-### How it works
+## How it works
 
-It runs a goroutine per API type.
+The tool runs five query types in parallel at a configurable interval (default: 5s):
 
-It starts a `Labels` goroutine that starts querying all labels on a Parca instance and then writes these into a shared map.
-The map is then read by the `Values` goroutine that selects a random label and queries all values for it.
+- **ProfileTypes** - discovers available profile types
+- **Labels** - queries label names for each profile type
+- **Values** - queries label values (if `-values-for-labels` is set)
+- **QueryRange** - fetches profile series data
+- **Query (merge)** - fetches merged flamegraph data
 
-This process it repeated every 5 seconds (configurable).
-The entries of the shared map eventually expire to not query too old data.
+Each query type runs against all configured profile types, time ranges, and label selectors.
 
-Similarly, it starts querying `ProfileTypes` every 10 seconds (configurable) to know what profile types are available.
-The result is written to a shared map.
-Every 15 seconds (configurable) there are `QueryRange` requests (querying 15min and 7 day ranges) for all series.
+Metrics are exposed at `http://<addr>/metrics` (default: `127.0.0.1:7171`).
 
-Once the profile series are discovered above there are `Query` requests querying single profiles every 10 seconds.
-For these queries it picks a random timestamp of the available time range and queries a random report type (flame graph, top table, pprof download).
+## Flags
 
-Every 15 seconds (configurable) there are `Query` requests that actually request merged profiles for either 15min, or 7 days, if enough data is available for each in a series.
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-url` | `http://localhost:7070` | Parca instance URL |
+| `-addr` | `127.0.0.1:7171` | HTTP server address for metrics |
+| `-query-interval` | `5s` | Interval between query rounds |
+| `-query-range` | `15m;12h;168h` | Time ranges for queries (semicolon-separated) |
+| `-types` | (auto-discover) | Profile types to query (semicolon-separated) |
+| `-labels` | `all` | Label selectors for filtering (semicolon-separated) |
+| `-values-for-labels` | (none) | Label names to query values for (semicolon-separated) |
+| `-token` | | Bearer token for authentication |
+| `-headers` | | Custom headers (`key=value,key2=value2`) |
+| `-client-timeout` | `10s` | HTTP client timeout |
 
-Metrics are collected and available on http://localhost:7171/metrics
+## Examples
+
+```bash
+# Basic usage with auto-discovered profile types
+./parca-load -url=http://localhost:7070
+
+# Specific profile types
+./parca-load -url=http://localhost:7070 \
+  -types='parca_agent:samples:count:cpu:nanoseconds:delta'
+
+# Custom time ranges and label filtering
+./parca-load -url=http://localhost:7070 \
+  -query-range='1h;24h' \
+  -labels='{job="api",env="dev"}'
+
+# Query values for specific labels
+./parca-load -url=http://localhost:7070 \
+  -values-for-labels='job;namespace'
+```
+
+Profile type format: `name:sample_type:sample_unit:period_type:period_unit[:delta]`
