@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -49,10 +48,9 @@ type Querier struct {
 
 	client queryv1alpha1connect.QueryServiceClient
 
-	rng *rand.Rand
-
-	labels       []string
 	profileTypes []string
+	// valuesForLabels are label names to query values for (from flag).
+	valuesForLabels []string
 
 	// queryTimeRanges are used by range and merge queries.
 	queryTimeRanges []time.Duration
@@ -66,6 +64,7 @@ func NewQuerier(
 	queryTimeRangesConf []time.Duration,
 	labelSelectors []string,
 	profileTypes []string,
+	valuesForLabels []string,
 ) *Querier {
 	return &Querier{
 		done: make(chan struct{}),
@@ -84,7 +83,7 @@ func NewQuerier(
 					Help:                        "The seconds it takes to make Values requests against a Parca",
 					NativeHistogramBucketFactor: 1.1,
 				},
-				[]string{"grpc_code"},
+				[]string{"grpc_code", "label"},
 			),
 			profileTypesHistogram: promauto.With(reg).NewHistogramVec(
 				prometheus.HistogramOpts{
@@ -113,10 +112,10 @@ func NewQuerier(
 			),
 		},
 		client:          client,
-		rng:             rand.New(rand.NewSource(time.Now().UnixNano())),
 		queryTimeRanges: queryTimeRangesConf,
 		labelSelectors:  labelSelectors,
 		profileTypes:    profileTypes,
+		valuesForLabels: valuesForLabels,
 	}
 }
 
@@ -221,14 +220,7 @@ func (q *Querier) queryLabels(ctx context.Context, interval time.Duration) {
 					return
 				}
 				q.metrics.labelsHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
-				q.labels = append(q.labels[:0], resp.Msg.LabelNames...)
-				log.Printf(
-					"labels(type=%s,over=%s): took %v and got %d results\n",
-					pt,
-					tr,
-					latency,
-					len(resp.Msg.LabelNames),
-				)
+				log.Printf("labels(type=%s,over=%s): took %v and got %d results\n", pt, tr, latency, len(resp.Msg.LabelNames))
 
 				return nil
 			}
@@ -243,61 +235,48 @@ func (q *Querier) queryLabels(ctx context.Context, interval time.Duration) {
 }
 
 func (q *Querier) queryValues(ctx context.Context, interval time.Duration) {
-	if len(q.labels) == 0 {
-		log.Println("values: no labels to query")
+	if len(q.valuesForLabels) == 0 {
 		return
 	}
-	label := q.labels[q.rng.Intn(len(q.labels))]
 
-	for _, profileType := range q.profileTypes {
-		for _, tr := range q.queryTimeRanges {
-			rangeEnd := time.Now()
-			rangeStart := rangeEnd.Add(-1 * tr)
+	for _, label := range q.valuesForLabels {
+		for _, profileType := range q.profileTypes {
+			for _, tr := range q.queryTimeRanges {
+				rangeEnd := time.Now()
+				rangeStart := rangeEnd.Add(-1 * tr)
 
-			pt := profileType
-			var resp *connect.Response[queryv1alpha1.ValuesResponse]
-			var count int
-			operation := func() (err error) {
-				defer func() { count++ }()
-				queryStart := time.Now()
-				req := &queryv1alpha1.ValuesRequest{
-					LabelName:   label,
-					Match:       nil,
-					Start:       timestamppb.New(rangeStart),
-					End:         timestamppb.New(rangeEnd),
-					ProfileType: &pt,
+				pt := profileType
+				lbl := label
+				var resp *connect.Response[queryv1alpha1.ValuesResponse]
+				var count int
+				operation := func() (err error) {
+					defer func() { count++ }()
+					queryStart := time.Now()
+					req := &queryv1alpha1.ValuesRequest{
+						LabelName:   lbl,
+						Match:       nil,
+						Start:       timestamppb.New(rangeStart),
+						End:         timestamppb.New(rangeEnd),
+						ProfileType: &pt,
+					}
+					resp, err = q.client.Values(ctx, connect.NewRequest(req))
+					latency := time.Since(queryStart)
+					if err != nil {
+						q.metrics.valuesHistogram.WithLabelValues(connect.CodeOf(err).String(), lbl).Observe(latency.Seconds())
+						log.Printf("values(label=%s,type=%s,over=%s): failed to make request %d: %v\n", lbl, pt, tr, count, err)
+						return
+					}
+					q.metrics.valuesHistogram.WithLabelValues(grpcCodeOK, lbl).Observe(latency.Seconds())
+					log.Printf("values(label=%s,type=%s,over=%s): took %v and got %d results\n", lbl, pt, tr, latency, len(resp.Msg.LabelValues))
+
+					return nil
 				}
-				resp, err = q.client.Values(ctx, connect.NewRequest(req))
-				latency := time.Since(queryStart)
-				if err != nil {
-					q.metrics.valuesHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
-					log.Printf(
-						"values(label=%s,type=%s,over=%s): failed to make request %d: %v\n",
-						label,
-						pt,
-						tr,
-						count,
-						err,
-					)
-					return
+
+				exp := backoff.NewExponentialBackOff()
+				exp.MaxElapsedTime = interval
+				if err := backoff.Retry(operation, backoff.WithContext(exp, ctx)); err != nil {
+					continue
 				}
-				q.metrics.valuesHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
-				log.Printf(
-					"values(label=%s,type=%s,over=%s): took %v and got %d results\n",
-					label,
-					pt,
-					tr,
-					latency,
-					len(resp.Msg.LabelValues),
-				)
-
-				return nil
-			}
-
-			exp := backoff.NewExponentialBackOff()
-			exp.MaxElapsedTime = interval
-			if err := backoff.Retry(operation, backoff.WithContext(exp, ctx)); err != nil {
-				continue
 			}
 		}
 	}

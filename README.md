@@ -74,3 +74,15 @@ The `-labels` flag allows filtering queries by label selectors. Use Prometheus-s
 ```
 
 When label selectors are specified, they are appended to the profile type in QueryRange and Query (merge) requests. For example, with `-labels='{job="api"}'`, a query becomes `memory:alloc_objects:count:space:bytes{job="api"}`
+
+#### Values for Labels
+
+The `-values-for-labels` flag specifies which label names to query values for. Multiple labels are separated by semicolons. If empty (default), values queries are skipped.
+
+```
+# Query values for specific labels
+./parca-load -url=http://localhost:7070 -types='...' -values-for-labels='job;namespace'
+
+# Skip values queries (default behavior)
+./parca-load -url=http://localhost:7070 -types='...'
+```

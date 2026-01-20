@@ -41,6 +41,7 @@ func main() {
 	queryRangeStr := flag.String("query-range", "15m;12h;168h", "Semicolon-separated time durations for query ranges")
 	labelsStr := flag.String("labels", "all", "Semicolon-separated label selectors for queries (e.g., '{job=\"api\"};{level=\"info\"}'), or 'all' for no filtering")
 	typesStr := flag.String("types", "", "Semicolon-separated profile types to query. If empty, types are auto-discovered from the backend.")
+	valuesForLabelsStr := flag.String("values-for-labels", "", "Semicolon-separated label names to query values for (e.g., 'job;namespace'). If empty, values queries are skipped.")
 
 	flag.Parse()
 
@@ -94,6 +95,8 @@ func main() {
 
 	profileTypes := parseProfileTypes(*typesStr)
 
+	valuesForLabels := parseValuesForLabels(*valuesForLabelsStr)
+
 	customHeaders, err := parseHeaders(*customHeadersStr)
 	if err != nil {
 		log.Fatalf("parse custom headers error: %v", err)
@@ -119,7 +122,7 @@ func main() {
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
-	querier := NewQuerier(reg, client, queryRanges, labelSelectors, profileTypes)
+	querier := NewQuerier(reg, client, queryRanges, labelSelectors, profileTypes, valuesForLabels)
 
 	var gr run.Group
 	gr.Add(run.SignalHandler(ctx, os.Interrupt, syscall.SIGTERM))
@@ -257,6 +260,21 @@ func parseProfileTypes(input string) []string {
 		}
 	}
 	return types
+}
+
+func parseValuesForLabels(input string) []string {
+	if input == "" {
+		return nil
+	}
+	parts := strings.Split(input, flagSeparator)
+	labels := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			labels = append(labels, p)
+		}
+	}
+	return labels
 }
 
 func parseHeaders(input string) (map[string]string, error) {
