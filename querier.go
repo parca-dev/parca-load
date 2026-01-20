@@ -67,56 +67,53 @@ func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServi
 		metrics: querierMetrics{
 			labelsHistogram: promauto.With(reg).NewHistogramVec(
 				prometheus.HistogramOpts{
-					Name:    "parca_client_labels_seconds",
-					Help:    "The seconds it takes to make Labels requests against a Parca",
-					Buckets: []float64{0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1},
+					Name:                        "parca_client_labels_seconds",
+					Help:                        "The seconds it takes to make Labels requests against a Parca",
+					NativeHistogramBucketFactor: 1.1,
 				},
 				[]string{"grpc_code"},
 			),
 			valuesHistogram: promauto.With(reg).NewHistogramVec(
 				prometheus.HistogramOpts{
-					Name:    "parca_client_values_seconds",
-					Help:    "The seconds it takes to make Values requests against a Parca",
-					Buckets: []float64{0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.25, 1.5, 1.75, 2, 3, 4, 5},
+					Name:                        "parca_client_values_seconds",
+					Help:                        "The seconds it takes to make Values requests against a Parca",
+					NativeHistogramBucketFactor: 1.1,
 				},
 				[]string{"grpc_code"},
 			),
 			profileTypesHistogram: promauto.With(reg).NewHistogramVec(
 				prometheus.HistogramOpts{
-					Name:    "parca_client_profiletypes_seconds",
-					Help:    "The seconds it takes to make ProfileTypes requests against a Parca",
-					Buckets: []float64{0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5},
+					Name:                        "parca_client_profiletypes_seconds",
+					Help:                        "The seconds it takes to make ProfileTypes requests against a Parca",
+					NativeHistogramBucketFactor: 1.1,
 				},
 				[]string{"grpc_code"},
 			),
 			rangeHistogram: promauto.With(reg).NewHistogramVec(
 				prometheus.HistogramOpts{
-					Name:    "parca_client_queryrange_seconds",
-					Help:    "The seconds it takes to make QueryRange requests against a Parca",
-					Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10},
+					Name:                        "parca_client_queryrange_seconds",
+					Help:                        "The seconds it takes to make QueryRange requests against a Parca",
+					NativeHistogramBucketFactor: 1.1,
 				},
-				[]string{"grpc_code", "range"},
+				[]string{"grpc_code", "range", "labels"},
 			),
 			singleHistogram: promauto.With(reg).NewHistogramVec(
 				prometheus.HistogramOpts{
-					Name:        "parca_client_query_seconds",
-					Help:        "The seconds it takes to make Query requests against a Parca",
-					ConstLabels: map[string]string{"mode": "single"},
-					Buckets:     prometheus.ExponentialBucketsRange(0.1, 120, 30),
+					Name:                        "parca_client_query_seconds",
+					Help:                        "The seconds it takes to make Query requests against a Parca",
+					ConstLabels:                 map[string]string{"mode": "single"},
+					NativeHistogramBucketFactor: 1.1,
 				},
 				[]string{"grpc_code", "report_type", "range"},
 			),
 			mergeHistogram: promauto.With(reg).NewHistogramVec(
 				prometheus.HistogramOpts{
-					Name:        "parca_client_query_seconds",
-					Help:        "The seconds it takes to make Query requests against a Parca",
-					ConstLabels: map[string]string{"mode": "merge"},
-					Buckets: []float64{
-						0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-						12, 13, 14, 15, 16, 17, 18, 19, 20,
-					},
+					Name:                        "parca_client_query_seconds",
+					Help:                        "The seconds it takes to make Query requests against a Parca",
+					ConstLabels:                 map[string]string{"mode": "merge"},
+					NativeHistogramBucketFactor: 1.1,
 				},
-				[]string{"grpc_code", "report_type", "range"},
+				[]string{"grpc_code", "report_type", "range", "labels"},
 			),
 		},
 		client:          client,
@@ -355,13 +352,13 @@ func (q *Querier) queryRange(ctx context.Context) {
 		latency := time.Since(queryStart)
 		if err != nil {
 			q.metrics.rangeHistogram.WithLabelValues(
-				connect.CodeOf(err).String(), tr.String(),
+				connect.CodeOf(err).String(), tr.String(), "all",
 			).Observe(latency.Seconds())
 			log.Printf("range(type=%s,over=%s): failed to make request: %v\n", profileType, tr, err)
 			continue
 		}
 
-		q.metrics.rangeHistogram.WithLabelValues(grpcCodeOK, tr.String()).Observe(latency.Seconds())
+		q.metrics.rangeHistogram.WithLabelValues(grpcCodeOK, tr.String(), "all").Observe(latency.Seconds())
 		log.Printf(
 			"range(type=%s,over=%s): took %s and got %d series\n",
 			profileType, tr, latency, len(resp.Msg.Series),
@@ -459,6 +456,7 @@ func (q *Querier) queryMerge(ctx context.Context) {
 					connect.CodeOf(err).String(),
 					reportType.String(),
 					tr.String(),
+					"all",
 				).Observe(latency.Seconds())
 
 				log.Printf(
@@ -472,6 +470,7 @@ func (q *Querier) queryMerge(ctx context.Context) {
 				grpcCodeOK,
 				reportType.String(),
 				tr.String(),
+				"all",
 			).Observe(latency.Seconds())
 
 			log.Printf(
