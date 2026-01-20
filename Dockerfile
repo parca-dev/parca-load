@@ -13,6 +13,8 @@ COPY dist dist
 # NOTICE: See goreleaser.yml for the build paths.
 RUN if [ "${TARGETARCH}" = 'amd64' ]; then \
         cp "dist/parca-load_${TARGETOS}_${TARGETARCH}_${TARGETVARIANT:-v1}/parca-load" . ; \
+    elif [ "${TARGETARCH}" = 'arm64' ]; then \
+        cp "dist/parca-load_${TARGETOS}_${TARGETARCH}_${TARGETVARIANT:-v8.0}/parca-load" . ; \
     elif [ "${TARGETARCH}" = 'arm' ]; then \
         cp "dist/parca-load_${TARGETOS}_${TARGETARCH}_${TARGETVARIANT##v}/parca-load" . ; \
     else \
