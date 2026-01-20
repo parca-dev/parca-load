@@ -68,7 +68,7 @@ jobs:
         with:
           distribution: goreleaser
           version: ${{ env.GORELEASER_VERSION }}
-          args: build --clean --skip=validate --snapshot --debug
+          args: build --clean --skip=validate --snapshot --verbose
 
       - name: Archive generated artifacts
         uses: actions/upload-artifact@v4
