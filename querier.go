@@ -24,6 +24,15 @@ const numHorizontalPixelsOn8KDisplay = 7680
 // pixels). This is a var because the proto request requires an address.
 var nodeTrimThreshold = float32(1) / numHorizontalPixelsOn8KDisplay
 
+// profileTypeToString converts a ProfileType proto to its string representation.
+func profileTypeToString(pt *queryv1alpha1.ProfileType) string {
+	s := fmt.Sprintf("%s:%s:%s:%s:%s", pt.Name, pt.SampleType, pt.SampleUnit, pt.PeriodType, pt.PeriodUnit)
+	if pt.Delta {
+		s += ":delta"
+	}
+	return s
+}
+
 type querierMetrics struct {
 	labelsHistogram       *prometheus.HistogramVec
 	valuesHistogram       *prometheus.HistogramVec
@@ -51,7 +60,13 @@ type Querier struct {
 	labelSelectors []string
 }
 
-func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServiceClient, queryTimeRangesConf []time.Duration, labelSelectors []string) *Querier {
+func NewQuerier(
+	reg *prometheus.Registry,
+	client queryv1alpha1connect.QueryServiceClient,
+	queryTimeRangesConf []time.Duration,
+	labelSelectors []string,
+	profileTypes []string,
+) *Querier {
 	return &Querier{
 		done: make(chan struct{}),
 		metrics: querierMetrics{
@@ -101,6 +116,7 @@ func NewQuerier(reg *prometheus.Registry, client queryv1alpha1connect.QueryServi
 		rng:             rand.New(rand.NewSource(time.Now().UnixNano())),
 		queryTimeRanges: queryTimeRangesConf,
 		labelSelectors:  labelSelectors,
+		profileTypes:    profileTypes,
 	}
 }
 
@@ -109,12 +125,31 @@ func (q *Querier) Run(ctx context.Context, interval time.Duration) {
 	q.cancel = cancel
 
 	defer close(q.done)
+
+	// If no profile types configured, discover them from the backend.
+	if len(q.profileTypes) == 0 {
+		// Use the longest query time range to discover all profile types.
+		tr := q.queryTimeRanges[len(q.queryTimeRanges)-1]
+		types, latency, err := q.fetchProfileTypes(ctx, tr)
+		if err != nil {
+			log.Printf("failed to discover profile types: %v\n", err)
+			return
+		}
+		if len(types) == 0 {
+			log.Println("no profile types found on backend")
+			return
+		}
+		q.profileTypes = make([]string, 0, len(types))
+		for _, pt := range types {
+			q.profileTypes = append(q.profileTypes, profileTypeToString(pt))
+		}
+		log.Printf("discovered %d profile types(over=%s) in %v: %v\n", len(q.profileTypes), tr, latency, q.profileTypes)
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	run := func() {
-		// Since a lot of these queries are dependent on other queries, run
-		// them one at a time.
 		q.queryProfileTypes(ctx, interval)
 		q.queryLabels(ctx, interval)
 		q.queryValues(ctx, interval)
@@ -141,57 +176,68 @@ func (q *Querier) Stop() {
 	<-q.done
 }
 
-func (q *Querier) queryLabels(ctx context.Context, interval time.Duration) {
-	// Pick a random profile type if available
-	var profileType *string
-	if len(q.profileTypes) > 0 {
-		pt := q.profileTypes[q.rng.Intn(len(q.profileTypes))]
-		profileType = &pt
+// fetchProfileTypes executes the ProfileTypes API call and returns the results.
+func (q *Querier) fetchProfileTypes(ctx context.Context, tr time.Duration) ([]*queryv1alpha1.ProfileType, time.Duration, error) {
+	rangeEnd := time.Now()
+	rangeStart := rangeEnd.Add(-1 * tr)
+
+	queryStart := time.Now()
+	resp, err := q.client.ProfileTypes(ctx, connect.NewRequest(&queryv1alpha1.ProfileTypesRequest{
+		Start: timestamppb.New(rangeStart),
+		End:   timestamppb.New(rangeEnd),
+	}))
+	latency := time.Since(queryStart)
+	if err != nil {
+		q.metrics.profileTypesHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
+		return nil, latency, err
 	}
+	q.metrics.profileTypesHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
+	return resp.Msg.Types, latency, nil
+}
 
-	for _, tr := range q.queryTimeRanges {
-		rangeEnd := time.Now()
-		rangeStart := rangeEnd.Add(-1 * tr)
+func (q *Querier) queryLabels(ctx context.Context, interval time.Duration) {
+	for _, profileType := range q.profileTypes {
+		for _, tr := range q.queryTimeRanges {
+			rangeEnd := time.Now()
+			rangeStart := rangeEnd.Add(-1 * tr)
 
-		var resp *connect.Response[queryv1alpha1.LabelsResponse]
-		var count int
-		operation := func() (err error) {
-			defer func() { count++ }()
+			pt := profileType
+			var resp *connect.Response[queryv1alpha1.LabelsResponse]
+			var count int
+			operation := func() (err error) {
+				defer func() { count++ }()
 
-			queryStart := time.Now()
-			req := &queryv1alpha1.LabelsRequest{
-				Start: timestamppb.New(rangeStart),
-				End:   timestamppb.New(rangeEnd),
-			}
-			if profileType != nil {
-				req.ProfileType = profileType
-			}
-			resp, err = q.client.Labels(ctx, connect.NewRequest(req))
-			latency := time.Since(queryStart)
-			if err != nil {
-				q.metrics.labelsHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
-				if profileType != nil {
-					log.Printf("labels(type=%s,over=%s): failed to make request %d: %v\n", *profileType, tr, count, err)
-				} else {
-					log.Printf("labels(over=%s): failed to make request %d: %v\n", tr, count, err)
+				queryStart := time.Now()
+				req := &queryv1alpha1.LabelsRequest{
+					Start:       timestamppb.New(rangeStart),
+					End:         timestamppb.New(rangeEnd),
+					ProfileType: &pt,
 				}
-				return
-			}
-			q.metrics.labelsHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
-			q.labels = append(q.labels[:0], resp.Msg.LabelNames...)
-			if profileType != nil {
-				log.Printf("labels(type=%s,over=%s): took %v and got %d results\n", *profileType, tr, latency, len(resp.Msg.LabelNames))
-			} else {
-				log.Printf("labels(over=%s): took %v and got %d results\n", tr, latency, len(resp.Msg.LabelNames))
+				resp, err = q.client.Labels(ctx, connect.NewRequest(req))
+				latency := time.Since(queryStart)
+				if err != nil {
+					q.metrics.labelsHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
+					log.Printf("labels(type=%s,over=%s): failed to make request %d: %v\n", pt, tr, count, err)
+					return
+				}
+				q.metrics.labelsHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
+				q.labels = append(q.labels[:0], resp.Msg.LabelNames...)
+				log.Printf(
+					"labels(type=%s,over=%s): took %v and got %d results\n",
+					pt,
+					tr,
+					latency,
+					len(resp.Msg.LabelNames),
+				)
+
+				return nil
 			}
 
-			return nil
-		}
-
-		exp := backoff.NewExponentialBackOff()
-		exp.MaxElapsedTime = interval
-		if err := backoff.Retry(operation, backoff.WithContext(exp, ctx)); err != nil {
-			continue
+			exp := backoff.NewExponentialBackOff()
+			exp.MaxElapsedTime = interval
+			if err := backoff.Retry(operation, backoff.WithContext(exp, ctx)); err != nil {
+				continue
+			}
 		}
 	}
 }
@@ -203,84 +249,72 @@ func (q *Querier) queryValues(ctx context.Context, interval time.Duration) {
 	}
 	label := q.labels[q.rng.Intn(len(q.labels))]
 
-	// Pick a random profile type if available
-	var profileType *string
-	if len(q.profileTypes) > 0 {
-		pt := q.profileTypes[q.rng.Intn(len(q.profileTypes))]
-		profileType = &pt
-	}
+	for _, profileType := range q.profileTypes {
+		for _, tr := range q.queryTimeRanges {
+			rangeEnd := time.Now()
+			rangeStart := rangeEnd.Add(-1 * tr)
 
-	for _, tr := range q.queryTimeRanges {
-		rangeEnd := time.Now()
-		rangeStart := rangeEnd.Add(-1 * tr)
-
-		var resp *connect.Response[queryv1alpha1.ValuesResponse]
-		var count int
-		operation := func() (err error) {
-			defer func() { count++ }()
-			queryStart := time.Now()
-			req := &queryv1alpha1.ValuesRequest{
-				LabelName: label,
-				Match:     nil,
-				Start:     timestamppb.New(rangeStart),
-				End:       timestamppb.New(rangeEnd),
-			}
-			if profileType != nil {
-				req.ProfileType = profileType
-			}
-			resp, err = q.client.Values(ctx, connect.NewRequest(req))
-			latency := time.Since(queryStart)
-			if err != nil {
-				q.metrics.valuesHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
-				if profileType != nil {
-					log.Printf("values(label=%s,type=%s,over=%s): failed to make request %d: %v\n", label, *profileType, tr, count, err)
-				} else {
-					log.Printf("values(label=%s,over=%s): failed to make request %d: %v\n", label, tr, count, err)
+			pt := profileType
+			var resp *connect.Response[queryv1alpha1.ValuesResponse]
+			var count int
+			operation := func() (err error) {
+				defer func() { count++ }()
+				queryStart := time.Now()
+				req := &queryv1alpha1.ValuesRequest{
+					LabelName:   label,
+					Match:       nil,
+					Start:       timestamppb.New(rangeStart),
+					End:         timestamppb.New(rangeEnd),
+					ProfileType: &pt,
 				}
-				return
-			}
-			q.metrics.valuesHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
-			if profileType != nil {
-				log.Printf("values(label=%s,type=%s,over=%s): took %v and got %d results\n", label, *profileType, tr, latency, len(resp.Msg.LabelValues))
-			} else {
-				log.Printf("values(label=%s,over=%s): took %v and got %d results\n", label, tr, latency, len(resp.Msg.LabelValues))
+				resp, err = q.client.Values(ctx, connect.NewRequest(req))
+				latency := time.Since(queryStart)
+				if err != nil {
+					q.metrics.valuesHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
+					log.Printf(
+						"values(label=%s,type=%s,over=%s): failed to make request %d: %v\n",
+						label,
+						pt,
+						tr,
+						count,
+						err,
+					)
+					return
+				}
+				q.metrics.valuesHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
+				log.Printf(
+					"values(label=%s,type=%s,over=%s): took %v and got %d results\n",
+					label,
+					pt,
+					tr,
+					latency,
+					len(resp.Msg.LabelValues),
+				)
+
+				return nil
 			}
 
-			return nil
-		}
-
-		exp := backoff.NewExponentialBackOff()
-		exp.MaxElapsedTime = interval
-		if err := backoff.Retry(operation, backoff.WithContext(exp, ctx)); err != nil {
-			continue
+			exp := backoff.NewExponentialBackOff()
+			exp.MaxElapsedTime = interval
+			if err := backoff.Retry(operation, backoff.WithContext(exp, ctx)); err != nil {
+				continue
+			}
 		}
 	}
 }
 
 func (q *Querier) queryProfileTypes(ctx context.Context, interval time.Duration) {
 	for _, tr := range q.queryTimeRanges {
-		rangeEnd := time.Now()
-		rangeStart := rangeEnd.Add(-1 * tr)
-
-		var resp *connect.Response[queryv1alpha1.ProfileTypesResponse]
 		var count int
-		operation := func() (err error) {
+		operation := func() error {
 			defer func() { count++ }()
 
-			queryStart := time.Now()
-			resp, err = q.client.ProfileTypes(ctx, connect.NewRequest(&queryv1alpha1.ProfileTypesRequest{
-				Start: timestamppb.New(rangeStart),
-				End:   timestamppb.New(rangeEnd),
-			}))
-			latency := time.Since(queryStart)
+			types, latency, err := q.fetchProfileTypes(ctx, tr)
 			if err != nil {
-				q.metrics.profileTypesHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
-				log.Printf("profile types(over=%s): failed to make request %d: %v\n", tr, count, err)
+				log.Printf("profile_types(over=%s): failed to make request %d: %v\n", tr, count, err)
 				return err
 			}
-			q.metrics.profileTypesHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
-			log.Printf("profile types(over=%s): took %v and got %d types\n", tr, latency, len(resp.Msg.Types))
-
+			log.Printf("profile_types(over=%s): took %v and got %d types\n", tr, latency, len(types))
 			return nil
 		}
 
@@ -289,120 +323,116 @@ func (q *Querier) queryProfileTypes(ctx context.Context, interval time.Duration)
 		if err := backoff.Retry(operation, backoff.WithContext(exp, ctx)); err != nil {
 			continue
 		}
-
-		if len(resp.Msg.Types) == 0 {
-			continue
-		}
-
-		q.profileTypes = q.profileTypes[:0]
-		for _, pt := range resp.Msg.Types {
-			key := fmt.Sprintf("%s:%s:%s:%s:%s", pt.Name, pt.SampleType, pt.SampleUnit, pt.PeriodType, pt.PeriodUnit)
-			if pt.Delta {
-				key += ":delta"
-			}
-			q.profileTypes = append(q.profileTypes, key)
-		}
 	}
 }
 
 func (q *Querier) queryRange(ctx context.Context) {
-	if len(q.profileTypes) == 0 {
-		log.Println("range: no profile types to query")
-		return
-	}
+	for _, profileType := range q.profileTypes {
+		for _, tr := range q.queryTimeRanges {
+			for _, labelSelector := range q.labelSelectors {
+				rangeEnd := time.Now()
+				rangeStart := rangeEnd.Add(-1 * tr)
 
-	profileType := q.profileTypes[q.rng.Intn(len(q.profileTypes))]
+				query := profileType
+				if labelSelector != "all" {
+					query = profileType + labelSelector
+				}
 
-	for _, tr := range q.queryTimeRanges {
-		for _, labelSelector := range q.labelSelectors {
-			rangeEnd := time.Now()
-			rangeStart := rangeEnd.Add(-1 * tr)
+				queryStart := time.Now()
+				resp, err := q.client.QueryRange(
+					ctx, connect.NewRequest(
+						&queryv1alpha1.QueryRangeRequest{
+							Query: query,
+							Start: timestamppb.New(rangeStart),
+							End:   timestamppb.New(rangeEnd),
+							Step:  durationpb.New(time.Duration(tr.Nanoseconds() / numHorizontalPixelsOn8KDisplay)),
+						},
+					),
+				)
+				latency := time.Since(queryStart)
+				if err != nil {
+					q.metrics.rangeHistogram.WithLabelValues(
+						connect.CodeOf(err).String(), tr.String(), labelSelector,
+					).Observe(latency.Seconds())
+					log.Printf(
+						"range(query=%s,over=%s,labels=%s): failed to make request: %v\n",
+						query,
+						tr,
+						labelSelector,
+						err,
+					)
+					continue
+				}
 
-			query := profileType
-			if labelSelector != "all" {
-				query = profileType + labelSelector
-			}
-
-			queryStart := time.Now()
-			resp, err := q.client.QueryRange(ctx, connect.NewRequest(&queryv1alpha1.QueryRangeRequest{
-				Query: query,
-				Start: timestamppb.New(rangeStart),
-				End:   timestamppb.New(rangeEnd),
-				Step:  durationpb.New(time.Duration(tr.Nanoseconds() / numHorizontalPixelsOn8KDisplay)),
-			}))
-			latency := time.Since(queryStart)
-			if err != nil {
 				q.metrics.rangeHistogram.WithLabelValues(
-					connect.CodeOf(err).String(), tr.String(), labelSelector,
+					grpcCodeOK,
+					tr.String(),
+					labelSelector,
 				).Observe(latency.Seconds())
-				log.Printf("range(query=%s,over=%s,labels=%s): failed to make request: %v\n", query, tr, labelSelector, err)
-				continue
+				log.Printf(
+					"range(query=%s,over=%s,labels=%s): took %s and got %d series\n",
+					query, tr, labelSelector, latency, len(resp.Msg.Series),
+				)
 			}
-
-			q.metrics.rangeHistogram.WithLabelValues(grpcCodeOK, tr.String(), labelSelector).Observe(latency.Seconds())
-			log.Printf(
-				"range(query=%s,over=%s,labels=%s): took %s and got %d series\n",
-				query, tr, labelSelector, latency, len(resp.Msg.Series),
-			)
 		}
 	}
 }
 
 func (q *Querier) queryMerge(ctx context.Context) {
-	if len(q.profileTypes) == 0 {
-		log.Println("merge: no profile types to query")
-		return
-	}
+	for _, profileType := range q.profileTypes {
+		for _, tr := range q.queryTimeRanges {
+			for _, labelSelector := range q.labelSelectors {
+				rangeEnd := time.Now()
+				rangeStart := rangeEnd.Add(-1 * tr)
 
-	profileType := q.profileTypes[q.rng.Intn(len(q.profileTypes))]
-	for _, tr := range q.queryTimeRanges {
-		for _, labelSelector := range q.labelSelectors {
-			rangeEnd := time.Now()
-			rangeStart := rangeEnd.Add(-1 * tr)
+				query := profileType
+				if labelSelector != "all" {
+					query = profileType + labelSelector
+				}
 
-			query := profileType
-			if labelSelector != "all" {
-				query = profileType + labelSelector
-			}
+				queryStart := time.Now()
+				_, err := q.client.Query(
+					ctx, connect.NewRequest(
+						&queryv1alpha1.QueryRequest{
+							Mode: queryv1alpha1.QueryRequest_MODE_MERGE,
+							Options: &queryv1alpha1.QueryRequest_Merge{
+								Merge: &queryv1alpha1.MergeProfile{
+									Query: query,
+									Start: timestamppb.New(rangeStart),
+									End:   timestamppb.New(rangeEnd),
+								},
+							},
+							ReportType:        queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_ARROW,
+							NodeTrimThreshold: &nodeTrimThreshold,
+						},
+					),
+				)
+				latency := time.Since(queryStart)
+				if err != nil {
+					q.metrics.mergeHistogram.WithLabelValues(
+						connect.CodeOf(err).String(),
+						tr.String(),
+						labelSelector,
+					).Observe(latency.Seconds())
 
-			queryStart := time.Now()
-			_, err := q.client.Query(ctx, connect.NewRequest(&queryv1alpha1.QueryRequest{
-				Mode: queryv1alpha1.QueryRequest_MODE_MERGE,
-				Options: &queryv1alpha1.QueryRequest_Merge{
-					Merge: &queryv1alpha1.MergeProfile{
-						Query: query,
-						Start: timestamppb.New(rangeStart),
-						End:   timestamppb.New(rangeEnd),
-					},
-				},
-				ReportType:        queryv1alpha1.QueryRequest_REPORT_TYPE_FLAMEGRAPH_ARROW,
-				NodeTrimThreshold: &nodeTrimThreshold,
-			}))
-			latency := time.Since(queryStart)
-			if err != nil {
+					log.Printf(
+						"merge(query=%s,over=%s,labels=%s): failed to make request: %v\n",
+						query, tr, labelSelector, err,
+					)
+					continue
+				}
+
 				q.metrics.mergeHistogram.WithLabelValues(
-					connect.CodeOf(err).String(),
+					grpcCodeOK,
 					tr.String(),
 					labelSelector,
 				).Observe(latency.Seconds())
 
 				log.Printf(
-					"merge(query=%s,over=%s,labels=%s): failed to make request: %v\n",
-					query, tr, labelSelector, err,
+					"merge(query=%s,over=%s,labels=%s): took %s\n",
+					query, tr, labelSelector, latency,
 				)
-				continue
 			}
-
-			q.metrics.mergeHistogram.WithLabelValues(
-				grpcCodeOK,
-				tr.String(),
-				labelSelector,
-			).Observe(latency.Seconds())
-
-			log.Printf(
-				"merge(query=%s,over=%s,labels=%s): took %s\n",
-				query, tr, labelSelector, latency,
-			)
 		}
 	}
 }

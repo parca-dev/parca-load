@@ -22,7 +22,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const grpcCodeOK = "ok"
+const (
+	grpcCodeOK    = "ok"
+	flagSeparator = ";"
+)
 
 func main() {
 	url := flag.String("url", "http://localhost:7070", "The URL for the Parca instance to query")
@@ -37,6 +40,7 @@ func main() {
 	queryInterval := flag.Duration("query-interval", 5*time.Second, "The time interval between queries to the Parca instance")
 	queryRangeStr := flag.String("query-range", "15m;12h;168h", "Semicolon-separated time durations for query ranges")
 	labelsStr := flag.String("labels", "all", "Semicolon-separated label selectors for queries (e.g., '{job=\"api\"};{level=\"info\"}'), or 'all' for no filtering")
+	typesStr := flag.String("types", "", "Semicolon-separated profile types to query. If empty, types are auto-discovered from the backend.")
 
 	flag.Parse()
 
@@ -88,6 +92,8 @@ func main() {
 
 	labelSelectors := parseLabels(*labelsStr)
 
+	profileTypes := parseProfileTypes(*typesStr)
+
 	customHeaders, err := parseHeaders(*customHeadersStr)
 	if err != nil {
 		log.Fatalf("parse custom headers error: %v", err)
@@ -113,7 +119,7 @@ func main() {
 	reg.MustRegister(collectors.NewGoCollector())
 	reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
-	querier := NewQuerier(reg, client, queryRanges, labelSelectors)
+	querier := NewQuerier(reg, client, queryRanges, labelSelectors, profileTypes)
 
 	var gr run.Group
 	gr.Add(run.SignalHandler(ctx, os.Interrupt, syscall.SIGTERM))
@@ -206,7 +212,7 @@ func (i *customHeadersInterceptor) WrapStreamingHandler(handler connect.Streamin
 }
 
 func parseTimeRanges(input string) ([]time.Duration, error) {
-	parts := strings.Split(input, ";")
+	parts := strings.Split(input, flagSeparator)
 	durations := make([]time.Duration, len(parts))
 	var err error
 
@@ -224,7 +230,7 @@ func parseLabels(input string) []string {
 	if input == "" || input == "all" {
 		return []string{"all"}
 	}
-	parts := strings.Split(input, ";")
+	parts := strings.Split(input, flagSeparator)
 	selectors := make([]string, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
@@ -236,6 +242,21 @@ func parseLabels(input string) []string {
 		return []string{"all"}
 	}
 	return selectors
+}
+
+func parseProfileTypes(input string) []string {
+	if input == "" {
+		return nil
+	}
+	parts := strings.Split(input, flagSeparator)
+	types := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			types = append(types, p)
+		}
+	}
+	return types
 }
 
 func parseHeaders(input string) (map[string]string, error) {

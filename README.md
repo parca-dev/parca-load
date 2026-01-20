@@ -18,26 +18,37 @@ docker run -d ghcr.io/parca-dev/parca-load
 
 ### How it works
 
-It runs a goroutine per API type.
+The tool queries a Parca instance using profile types. If the `-types` flag is not specified, the tool will auto-discover available profile types from the backend using the ProfileTypes API.
 
-It starts a `Labels` goroutine that starts querying all labels on a Parca instance and then writes these into a shared map.
-The map is then read by the `Values` goroutine that selects a random label and queries all values for it.
+It starts a `Labels` query that gets all labels for each profile type and writes these into a shared map.
+The map is then read by the `Values` query that selects a random label and queries all values for it.
 
-This process it repeated every 5 seconds (configurable).
-The entries of the shared map eventually expire to not query too old data.
+This process is repeated at the configured query interval (default: 5 seconds).
 
-Similarly, it starts querying `ProfileTypes` every 10 seconds (configurable) to know what profile types are available.
-The result is written to a shared map.
-Every 15 seconds (configurable) there are `QueryRange` requests (querying 15min and 7 day ranges) for all series.
+For each profile type and time range, `QueryRange` requests are made to get profile series data.
 
-Once the profile series are discovered above there are `Query` requests querying single profiles every 10 seconds.
-For these queries it picks a random timestamp of the available time range and queries a random report type (flame graph, top table, pprof download).
-
-Every 15 seconds (configurable) there are `Query` requests that actually request merged profiles for either 15min, or 7 days, if enough data is available for each in a series.
+`Query` requests with merge mode are made to request merged profiles for each profile type and time range combination.
 
 Metrics are collected and available on http://localhost:7171/metrics
 
 ### Configuration
+
+#### Profile Types (Optional)
+
+The `-types` flag specifies which profile types to query. If not specified, profile types are auto-discovered from the backend. Multiple profile types are separated by semicolons.
+
+Profile type format: `name:sample_type:sample_unit:period_type:period_unit[:delta]`
+
+```
+# Auto-discover profile types from the backend
+./parca-load -url=http://localhost:7070
+
+# Single profile type
+./parca-load -url=http://localhost:7070 -types='parca_agent:samples:count:cpu:nanoseconds:delta'
+
+# Multiple profile types
+./parca-load -url=http://localhost:7070 -types='parca_agent:samples:count:cpu:nanoseconds:delta;memory:alloc_objects:count:space:bytes'
+```
 
 #### Query Range
 
