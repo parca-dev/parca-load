@@ -5,8 +5,7 @@
   ],
   "packageRules": [
     {
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "matchUpdateTypes": ["pin", "digest"],
       "enabled": false
     }
   ]

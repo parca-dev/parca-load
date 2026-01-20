@@ -144,4 +144,4 @@ jobs:
         run: |
           podman manifest push --all "${IMAGE_NAME}:${IMAGE_TAG}" "docker://${IMAGE_NAME}:${IMAGE_TAG}"
           crane digest "${IMAGE_NAME}:${IMAGE_TAG}"
-          cosign sign --force -a "GIT_HASH=${COMMIT}" -a "GIT_VERSION=${IMAGE_TAG}" ghcr.io/parca-dev/parca-load@$(crane digest "${IMAGE_NAME}:${IMAGE_TAG}")
+          cosign sign -y -a "GIT_HASH=${COMMIT}" -a "GIT_VERSION=${IMAGE_TAG}" ghcr.io/parca-dev/parca-load@$(crane digest "${IMAGE_NAME}:${IMAGE_TAG}")
