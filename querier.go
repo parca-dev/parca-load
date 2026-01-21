@@ -39,6 +39,11 @@ type querierMetrics struct {
 	profileTypesHistogram *prometheus.HistogramVec
 	rangeHistogram        *prometheus.HistogramVec
 	mergeHistogram        *prometheus.HistogramVec
+	labelsCounter         *prometheus.CounterVec
+	valuesCounter         *prometheus.CounterVec
+	profileTypesCounter   *prometheus.CounterVec
+	rangeCounter          *prometheus.CounterVec
+	mergeCounter          *prometheus.CounterVec
 }
 
 type Querier struct {
@@ -108,6 +113,42 @@ func NewQuerier(
 					Help:                        "The seconds it takes to make Query requests against a Parca",
 					ConstLabels:                 map[string]string{"mode": "merge"},
 					NativeHistogramBucketFactor: 1.1,
+				},
+				[]string{"grpc_code", "range", "labels"},
+			),
+			labelsCounter: promauto.With(reg).NewCounterVec(
+				prometheus.CounterOpts{
+					Name: "parca_client_labels_total",
+					Help: "Total number of Labels requests against Parca",
+				},
+				[]string{"grpc_code"},
+			),
+			valuesCounter: promauto.With(reg).NewCounterVec(
+				prometheus.CounterOpts{
+					Name: "parca_client_values_total",
+					Help: "Total number of Values requests against Parca",
+				},
+				[]string{"grpc_code", "label"},
+			),
+			profileTypesCounter: promauto.With(reg).NewCounterVec(
+				prometheus.CounterOpts{
+					Name: "parca_client_profiletypes_total",
+					Help: "Total number of ProfileTypes requests against Parca",
+				},
+				[]string{"grpc_code"},
+			),
+			rangeCounter: promauto.With(reg).NewCounterVec(
+				prometheus.CounterOpts{
+					Name: "parca_client_queryrange_total",
+					Help: "Total number of QueryRange requests against Parca",
+				},
+				[]string{"grpc_code", "range", "labels"},
+			),
+			mergeCounter: promauto.With(reg).NewCounterVec(
+				prometheus.CounterOpts{
+					Name:        "parca_client_query_total",
+					Help:        "Total number of Query requests against Parca",
+					ConstLabels: map[string]string{"mode": "merge"},
 				},
 				[]string{"grpc_code", "range", "labels"},
 			),
@@ -228,9 +269,11 @@ func (q *Querier) fetchProfileTypes(ctx context.Context, tr time.Duration) (
 	latency := time.Since(queryStart)
 	if err != nil {
 		q.metrics.profileTypesHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
+		q.metrics.profileTypesCounter.WithLabelValues(connect.CodeOf(err).String()).Inc()
 		return nil, latency, err
 	}
 	q.metrics.profileTypesHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
+	q.metrics.profileTypesCounter.WithLabelValues(grpcCodeOK).Inc()
 	return resp.Msg.Types, latency, nil
 }
 
@@ -256,10 +299,12 @@ func (q *Querier) queryLabels(ctx context.Context, interval time.Duration) {
 				latency := time.Since(queryStart)
 				if err != nil {
 					q.metrics.labelsHistogram.WithLabelValues(connect.CodeOf(err).String()).Observe(latency.Seconds())
+					q.metrics.labelsCounter.WithLabelValues(connect.CodeOf(err).String()).Inc()
 					log.Printf("labels(type=%s,over=%s): failed to make request %d: %v\n", pt, tr, count, err)
 					return
 				}
 				q.metrics.labelsHistogram.WithLabelValues(grpcCodeOK).Observe(latency.Seconds())
+				q.metrics.labelsCounter.WithLabelValues(grpcCodeOK).Inc()
 				log.Printf(
 					"labels(type=%s,over=%s): took %v and got %d results\n",
 					pt,
@@ -308,10 +353,8 @@ func (q *Querier) queryValues(ctx context.Context, interval time.Duration) {
 					resp, err = q.client.Values(ctx, connect.NewRequest(req))
 					latency := time.Since(queryStart)
 					if err != nil {
-						q.metrics.valuesHistogram.WithLabelValues(
-							connect.CodeOf(err).String(),
-							lbl,
-						).Observe(latency.Seconds())
+						q.metrics.valuesHistogram.WithLabelValues(connect.CodeOf(err).String(), lbl).Observe(latency.Seconds())
+						q.metrics.valuesCounter.WithLabelValues(connect.CodeOf(err).String(), lbl).Inc()
 						log.Printf(
 							"values(label=%s,type=%s,over=%s): failed to make request %d: %v\n",
 							lbl,
@@ -323,6 +366,7 @@ func (q *Querier) queryValues(ctx context.Context, interval time.Duration) {
 						return
 					}
 					q.metrics.valuesHistogram.WithLabelValues(grpcCodeOK, lbl).Observe(latency.Seconds())
+					q.metrics.valuesCounter.WithLabelValues(grpcCodeOK, lbl).Inc()
 					log.Printf(
 						"values(label=%s,type=%s,over=%s): took %v and got %d results\n",
 						lbl,
@@ -396,6 +440,9 @@ func (q *Querier) queryRange(ctx context.Context) {
 					q.metrics.rangeHistogram.WithLabelValues(
 						connect.CodeOf(err).String(), tr.String(), labelSelector,
 					).Observe(latency.Seconds())
+					q.metrics.rangeCounter.WithLabelValues(
+						connect.CodeOf(err).String(), tr.String(), labelSelector,
+					).Inc()
 					log.Printf(
 						"range(query=%s,over=%s,labels=%s): failed to make request: %v\n",
 						query,
@@ -407,10 +454,14 @@ func (q *Querier) queryRange(ctx context.Context) {
 				}
 
 				q.metrics.rangeHistogram.WithLabelValues(
+					grpcCodeOK, tr.String(),
+					labelSelector,
+				).Observe(latency.Seconds())
+				q.metrics.rangeCounter.WithLabelValues(
 					grpcCodeOK,
 					tr.String(),
 					labelSelector,
-				).Observe(latency.Seconds())
+				).Inc()
 				log.Printf(
 					"range(query=%s,over=%s,labels=%s): took %s and got %d series\n",
 					query, tr, labelSelector, latency, len(resp.Msg.Series),
@@ -452,10 +503,14 @@ func (q *Querier) queryMerge(ctx context.Context) {
 				latency := time.Since(queryStart)
 				if err != nil {
 					q.metrics.mergeHistogram.WithLabelValues(
+						connect.CodeOf(err).String(), tr.String(),
+						labelSelector,
+					).Observe(latency.Seconds())
+					q.metrics.mergeCounter.WithLabelValues(
 						connect.CodeOf(err).String(),
 						tr.String(),
 						labelSelector,
-					).Observe(latency.Seconds())
+					).Inc()
 
 					log.Printf(
 						"merge(query=%s,over=%s,labels=%s): failed to make request: %v\n",
@@ -465,10 +520,14 @@ func (q *Querier) queryMerge(ctx context.Context) {
 				}
 
 				q.metrics.mergeHistogram.WithLabelValues(
+					grpcCodeOK, tr.String(),
+					labelSelector,
+				).Observe(latency.Seconds())
+				q.metrics.mergeCounter.WithLabelValues(
 					grpcCodeOK,
 					tr.String(),
 					labelSelector,
-				).Observe(latency.Seconds())
+				).Inc()
 
 				log.Printf(
 					"merge(query=%s,over=%s,labels=%s): took %s\n",
