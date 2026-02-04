@@ -31,7 +31,7 @@ jobs:
       contents: read
     steps:
       - id: skip-check
-        uses: fkirc/skip-duplicate-actions@v5
+        uses: fkirc/skip-duplicate-actions@f75f66ce1886f00957d99748a42c724f4330bdcf # v5
         with:
           do_not_skip: '["schedule", "workflow_dispatch"]'
           paths: |-
@@ -71,7 +71,7 @@ jobs:
           args: build --clean --skip=validate --snapshot --verbose
 
       - name: Archive generated artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: parca-load-dist-container
           if-no-files-found: error
@@ -103,7 +103,7 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: parca-load-dist-container
           path: dist
@@ -130,7 +130,7 @@ jobs:
 
       - name: Install crane
         if: ${{ github.event_name != 'pull_request' }}
-        uses: imjasonh/setup-crane@v0.4
+        uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
 
       - name: Login to registry
         if: ${{ github.event_name != 'pull_request' }}
