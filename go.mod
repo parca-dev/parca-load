@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.26.0
 
 require (
-	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.19.1-20251203114737-dab2f094ec25.2
+	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.19.1-20260206050007-a47b093e4fe5.2
 	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.36.11-20251203114737-dab2f094ec25.1
 	connectrpc.com/connect v1.19.1
 	github.com/cenkalti/backoff/v4 v4.3.0
