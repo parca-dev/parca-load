@@ -1,6 +1,6 @@
 module github.com/parca-dev/parca-load
 
-go 1.24.0
+go 1.25.0
 
 toolchain go1.26.1
 
@@ -13,7 +13,7 @@ require (
 	github.com/hashicorp/vault/api/auth/kubernetes v0.10.0
 	github.com/oklog/run v1.2.0
 	github.com/prometheus/client_golang v1.23.2
-	golang.org/x/sync v0.19.0
+	golang.org/x/sync v0.20.0
 	google.golang.org/protobuf v1.36.11
 )
 
