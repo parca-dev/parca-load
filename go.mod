@@ -9,7 +9,7 @@ require (
 	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.36.11-20260312070700-91a25b39bb50.1
 	connectrpc.com/connect v1.19.1
 	github.com/cenkalti/backoff/v4 v4.3.0
-	github.com/hashicorp/vault/api v1.22.0
+	github.com/hashicorp/vault/api v1.23.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.10.0
 	github.com/oklog/run v1.2.0
 	github.com/prometheus/client_golang v1.23.2
@@ -41,10 +41,10 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	golang.org/x/crypto v0.41.0 // indirect
-	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241216192217-9240e9c98484 // indirect
 )
