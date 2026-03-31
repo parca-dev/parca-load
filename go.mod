@@ -10,7 +10,7 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/vault/api v1.23.0
-	github.com/hashicorp/vault/api/auth/kubernetes v0.10.0
+	github.com/hashicorp/vault/api/auth/kubernetes v0.12.0
 	github.com/oklog/run v1.2.0
 	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/sync v0.20.0
