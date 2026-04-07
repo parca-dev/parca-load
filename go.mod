@@ -2,7 +2,7 @@ module github.com/parca-dev/parca-load
 
 go 1.25.0
 
-toolchain go1.26.1
+toolchain go1.26.2
 
 require (
 	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.19.1-20260312070700-91a25b39bb50.2
