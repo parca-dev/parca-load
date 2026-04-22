@@ -5,9 +5,9 @@ go 1.25.0
 toolchain go1.26.2
 
 require (
-	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.19.1-20260413103946-e19e4fde69b5.2
+	buf.build/gen/go/parca-dev/parca/connectrpc/go v1.19.2-20260413103946-e19e4fde69b5.1
 	buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.36.11-20260413103946-e19e4fde69b5.1
-	connectrpc.com/connect v1.19.1
+	connectrpc.com/connect v1.19.2
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/hashicorp/vault/api v1.23.0
 	github.com/hashicorp/vault/api/auth/kubernetes v0.12.0
