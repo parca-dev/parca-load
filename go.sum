@@ -1,9 +1,9 @@
-buf.build/gen/go/parca-dev/parca/connectrpc/go v1.20.0-20260523035409-ca8a9e862107.1 h1:4igQcHz4m2BRysboyZLujnIZFXdRyStVhF8r4CTQJB0=
-buf.build/gen/go/parca-dev/parca/connectrpc/go v1.20.0-20260523035409-ca8a9e862107.1/go.mod h1:MxMlD8Jx4Uxos9vA6M8JzSqPeeZLzK0hOKb8NwIDEMg=
+buf.build/gen/go/parca-dev/parca/connectrpc/go v1.21.0-20260523035409-ca8a9e862107.1 h1:CMuz9mlRin8wWroEy1qnG/rZ60//z9WBEFJPepYLiWg=
+buf.build/gen/go/parca-dev/parca/connectrpc/go v1.21.0-20260523035409-ca8a9e862107.1/go.mod h1:ORUWvcQjFJMKGeFfMqxXMFfJ1JYVzkKnNoPegM+87BI=
 buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.36.12-20260523035409-ca8a9e862107.2 h1:yJuohiVBrS5kwQSAeywxMymAYq9ULCrBqSWxUTEda8A=
 buf.build/gen/go/parca-dev/parca/protocolbuffers/go v1.36.12-20260523035409-ca8a9e862107.2/go.mod h1:bxDxUQYtaVaZ8yDy8TTwCz/gb699CqKuuyhARyyR/OE=
-connectrpc.com/connect v1.20.0 h1:6TNDAB+WeNd2uolWNlYczB5E0KNNaVMNUEx8JEUsPmQ=
-connectrpc.com/connect v1.20.0/go.mod h1:A2ygJrukXwWy32vkCAAHNVguZrqZ+jeZ9rGRnGR4dN4=
+connectrpc.com/connect v1.21.0 h1:LhqSJt7jHf5NJBo9Jq/t/9FjcYAideif0mg+qe2jCUs=
+connectrpc.com/connect v1.21.0/go.mod h1:A2ygJrukXwWy32vkCAAHNVguZrqZ+jeZ9rGRnGR4dN4=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
